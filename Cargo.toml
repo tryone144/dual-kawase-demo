@@ -1,0 +1,7 @@
+[package]
+name = "dual-kawase-demo"
+version = "0.1.0"
+authors = ["Bernd Busse <bernd AT busse-apps DOT de>"]
+edition = "2018"
+
+[dependencies]
