@@ -18,7 +18,14 @@ fn main() {
 
     // Create window
     let window = video_subsystem.window("Demo", 900, 700)
-        .build().expect("Cannot create window");
+        .opengl().build().expect("Cannot create OpenGL window");
+
+    let _gl_context = window.gl_create_context().expect("Cannot load GL context");
+    let _gl = gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
+
+    unsafe {
+        gl::ClearColor(0.3, 0.3, 0.5, 1.0);
+    }
 
     // Main loop
     let mut ev_pump = sdl.event_pump().unwrap();
@@ -26,11 +33,15 @@ fn main() {
         // Handle all queued events
         for event in ev_pump.poll_iter() {
             match event {
-                Event::Quit{..} => break 'main,
+                Event::Quit{ .. } => break 'main,
                 _ => (),
             }
         }
 
         // Draw window contents here
+        unsafe {
+            gl::Clear(gl::COLOR_BUFFER_BIT);
+        }
+        window.gl_swap_window();
     }
 }
