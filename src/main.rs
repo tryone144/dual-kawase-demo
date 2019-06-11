@@ -6,12 +6,14 @@
 // that was distributed with this source code.
 //
 
-use gl::types::{GLvoid, GLuint, GLint, GLsizeiptr};
+use gl::types::{GLint, GLvoid};
 use sdl2::event::Event;
 
 mod renderer_gl;
 
-use renderer_gl::{FragmentShader, Program, VertexShader};
+use renderer_gl::{
+    ArrayBuffer, ElementArrayBuffer, FragmentShader, Program, VertexArray, VertexShader,
+};
 
 const WINDOW_TITLE: &str = "Dual-Filter Kawase Blur — Demo";
 const WIN_WIDTH: u32 = 1280;
@@ -58,50 +60,36 @@ fn main() {
 
     // Init full-screen square
     let vertices: Vec<f32> = vec![
-        -1.0, -1.0, 0.0,
-        1.0, -1.0, 0.0,
-        1.0, 1.0, 0.0,
-        -1.0, 1.0, 0.0,
+        -1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, 1.0, 0.0,
     ];
-    let indices: Vec<u32> = vec![
-        0, 1, 3,
-        1, 2, 3,
-    ];
+    let indices: Vec<u32> = vec![0, 1, 3, 1, 2, 3];
 
-    let mut fbo: GLuint = 0;
+    let mut vbo = ArrayBuffer::new();
+    vbo.bind();
+    vbo.set_data(&vertices, gl::STATIC_DRAW);
+    vbo.unbind();
+
+    let mut ebo = ElementArrayBuffer::new();
+    ebo.bind();
+    ebo.set_data(&indices, gl::STATIC_DRAW);
+    ebo.unbind();
+
+    let vao = VertexArray::new();
+    vao.bind();
+    vbo.bind();
     unsafe {
-        gl::GenBuffers(1, &mut fbo);
-
-        gl::BindBuffer(gl::ARRAY_BUFFER, fbo);
-        gl::BufferData(gl::ARRAY_BUFFER,
-                       (vertices.len() * std::mem::size_of::<f32>()) as GLsizeiptr,
-                       vertices.as_ptr() as *const GLvoid,
-                       gl::STATIC_DRAW);
-        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-    }
-
-    let mut ebo: GLuint = 0;
-    unsafe {
-        gl::GenBuffers(1, &mut ebo);
-
-        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
-        gl::BufferData(gl::ELEMENT_ARRAY_BUFFER, (indices.len() * std::mem::size_of::<u32>()) as GLsizeiptr, indices.as_ptr() as *const GLvoid, gl::STATIC_DRAW);
-        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, 0);
-    }
-
-    let mut vao: GLuint = 0;
-    unsafe {
-        gl::GenVertexArrays(1, &mut vao);
-
-        gl::BindVertexArray(vao);
-        gl::BindBuffer(gl::ARRAY_BUFFER, fbo);
-
         gl::EnableVertexAttribArray(0);
-        gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, (3 * std::mem::size_of::<f32>()) as GLint, std::ptr::null());
-
-        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-        gl::BindVertexArray(0);
+        gl::VertexAttribPointer(
+            0,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            (3 * std::mem::size_of::<f32>()) as GLint,
+            std::ptr::null(),
+        );
     }
+    vbo.unbind();
+    vao.unbind();
 
     // Main loop
     let mut ev_pump = sdl.event_pump().unwrap();
@@ -121,12 +109,19 @@ fn main() {
 
         // Use main program
         main_program.activate();
+        vao.bind();
         unsafe {
-            gl::BindVertexArray(vao);
-            gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, indices.as_ptr() as *const GLvoid);
+            gl::DrawElements(
+                gl::TRIANGLES,
+                6,
+                gl::UNSIGNED_INT,
+                indices.as_ptr() as *const GLvoid,
+            );
         }
 
         // Display rendered scene
         window.gl_swap_window();
+
+        std::thread::sleep(std::time::Duration::new(0, 1e9 as u32 / 60));
     }
 }
