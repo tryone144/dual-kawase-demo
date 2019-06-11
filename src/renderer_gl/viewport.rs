@@ -23,6 +23,10 @@ impl Viewport {
         }
     }
 
+    pub fn size(&self) -> (u32, u32) {
+        (self.w, self.h)
+    }
+
     pub fn update_size(&mut self, width: u32, height: u32) {
         self.w = width;
         self.h = height;

@@ -5,5 +5,5 @@ authors = ["Bernd Busse <bernd AT busse-apps DOT de>"]
 edition = "2018"
 
 [dependencies]
-sdl2 = { version = "0.32", features = ["image"] }
+sdl2 = { version = "0.32", features = ["image", "ttf", "gfx"] }
 gl = "0.12"
