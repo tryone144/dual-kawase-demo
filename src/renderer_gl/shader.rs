@@ -73,6 +73,15 @@ impl Program {
             gl::UseProgram(self.id);
         }
     }
+
+    //pub fn set_uniform(&self, name: &str, value: (f32, f32)) {
+    //    let uniform: GLint =
+    //        unsafe { gl::GetUniformLocation(self.id(), name.as_ptr() as *const GLchar) };
+
+    //    unsafe {
+    //        gl::Uniform2f(uniform, value.0, value.1);
+    //    }
+    //}
 }
 
 impl Drop for Program {
