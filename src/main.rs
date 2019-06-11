@@ -7,57 +7,19 @@
 //
 
 use gl::types::{GLint, GLvoid};
-use sdl2::event::Event;
+use sdl2::event::{Event, WindowEvent};
 
 mod renderer_gl;
 
 use renderer_gl::{
-    ArrayBuffer, ElementArrayBuffer, FragmentShader, Program, VertexArray, VertexShader,
+    ArrayBuffer, ElementArrayBuffer, FragmentShader, Program, VertexArray, VertexShader, Viewport,
 };
 
 const WINDOW_TITLE: &str = "Dual-Filter Kawase Blur — Demo";
 const WIN_WIDTH: u32 = 1280;
 const WIN_HEIGHT: u32 = 720;
 
-fn main() {
-    println!("Hello, world!");
-
-    // Init SDL2 with video subsystem
-    let sdl = sdl2::init().expect("Cannot initialize SDL2");
-    let video_subsystem = sdl.video().expect("Cannot initialize video subsystem");
-
-    let gl_attr = video_subsystem.gl_attr();
-
-    gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-    gl_attr.set_context_version(3, 3);
-
-    // Create window
-    let window = video_subsystem
-        .window(WINDOW_TITLE, WIN_WIDTH, WIN_HEIGHT)
-        .opengl()
-        .build()
-        .expect("Cannot create OpenGL window");
-
-    let _gl_context = window.gl_create_context().expect("Cannot load GL context");
-    let _gl =
-        gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
-
-    // Init shader and program
-    let vert_shader = VertexShader::from_source(include_str!("shaders/triangle.vert"))
-        .expect("Cannot compile vertex shader");
-    let frag_shader = FragmentShader::from_source(include_str!("shaders/triangle.frag"))
-        .expect("Cannot compile fragment shader");
-
-    let main_program = Program::from_shaders(&[vert_shader.into(), frag_shader.into()])
-        .expect("Cannot link main program");
-
-    // Init GL state
-    unsafe {
-        //gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
-        gl::Viewport(0, 0, WIN_WIDTH as i32, WIN_HEIGHT as i32);
-        gl::ClearColor(0.0, 0.0, 0.0, 1.0);
-    }
-
+fn run(sdl: sdl2::Sdl, window: sdl2::video::Window, mut vp: Viewport, program: Program) {
     // Init full-screen square
     let vertices: Vec<f32> = vec![
         -1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, 1.0, 0.0,
@@ -91,6 +53,8 @@ fn main() {
     vbo.unbind();
     vao.unbind();
 
+    vp.activate();
+
     // Main loop
     let mut ev_pump = sdl.event_pump().unwrap();
     'main: loop {
@@ -98,6 +62,13 @@ fn main() {
         for event in ev_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => break 'main,
+                Event::Window {
+                    win_event: WindowEvent::Resized(w, h),
+                    ..
+                } => {
+                    vp.update_size(w as u32, h as u32);
+                    vp.activate();
+                }
                 _ => (),
             }
         }
@@ -108,7 +79,7 @@ fn main() {
         }
 
         // Use main program
-        main_program.activate();
+        program.activate();
         vao.bind();
         unsafe {
             gl::DrawElements(
@@ -124,4 +95,48 @@ fn main() {
 
         std::thread::sleep(std::time::Duration::new(0, 1e9 as u32 / 60));
     }
+
+}
+
+fn main() {
+    println!("Hello, world!");
+
+    // Init SDL2 with video subsystem
+    let sdl = sdl2::init().expect("Cannot initialize SDL2");
+    let video_subsystem = sdl.video().expect("Cannot initialize video subsystem");
+
+    let gl_attr = video_subsystem.gl_attr();
+
+    gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
+    gl_attr.set_context_version(3, 3);
+
+    // Create window
+    let window = video_subsystem
+        .window(WINDOW_TITLE, WIN_WIDTH, WIN_HEIGHT)
+        .resizable()
+        .opengl()
+        .build()
+        .expect("Cannot create OpenGL window");
+    let mut viewport = Viewport::from_window(WIN_WIDTH, WIN_HEIGHT);
+
+    let _gl_context = window.gl_create_context().expect("Cannot load GL context");
+    let _gl =
+        gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
+
+    // Init shader and program
+    let vert_shader = VertexShader::from_source(include_str!("shaders/triangle.vert"))
+        .expect("Cannot compile vertex shader");
+    let frag_shader = FragmentShader::from_source(include_str!("shaders/triangle.frag"))
+        .expect("Cannot compile fragment shader");
+
+    let main_program = Program::from_shaders(&[vert_shader.into(), frag_shader.into()])
+        .expect("Cannot link main program");
+
+    // Init GL state
+    unsafe {
+        //gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
+        gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+    }
+
+    run(sdl, window, viewport, main_program);
 }

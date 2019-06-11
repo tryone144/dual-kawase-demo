@@ -10,9 +10,11 @@ use std::ffi::CString;
 
 mod buffer;
 mod shader;
+mod viewport;
 
 pub use self::buffer::{ArrayBuffer, ElementArrayBuffer, VertexArray};
 pub use self::shader::{FragmentShader, GlShader, Program, VertexShader};
+pub use self::viewport::Viewport;
 
 fn new_cstring_with_len(len: usize) -> CString {
     // allocate sufficiently sized buffer
