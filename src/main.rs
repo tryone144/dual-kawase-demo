@@ -6,9 +6,7 @@
 // that was distributed with this source code.
 //
 
-//use std::ffi::CString;
-
-//use gl::types::GLuint;
+use gl::types::{GLvoid, GLuint, GLint, GLsizeiptr};
 use sdl2::event::Event;
 
 mod renderer_gl;
@@ -53,12 +51,57 @@ fn main() {
 
     // Init GL state
     unsafe {
+        //gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
         gl::Viewport(0, 0, WIN_WIDTH as i32, WIN_HEIGHT as i32);
-        gl::ClearColor(0.3, 0.3, 0.5, 1.0);
+        gl::ClearColor(0.0, 0.0, 0.0, 1.0);
     }
 
-    // Use main program
-    main_program.activate();
+    // Init full-screen square
+    let vertices: Vec<f32> = vec![
+        -1.0, -1.0, 0.0,
+        1.0, -1.0, 0.0,
+        1.0, 1.0, 0.0,
+        -1.0, 1.0, 0.0,
+    ];
+    let indices: Vec<u32> = vec![
+        0, 1, 3,
+        1, 2, 3,
+    ];
+
+    let mut fbo: GLuint = 0;
+    unsafe {
+        gl::GenBuffers(1, &mut fbo);
+
+        gl::BindBuffer(gl::ARRAY_BUFFER, fbo);
+        gl::BufferData(gl::ARRAY_BUFFER,
+                       (vertices.len() * std::mem::size_of::<f32>()) as GLsizeiptr,
+                       vertices.as_ptr() as *const GLvoid,
+                       gl::STATIC_DRAW);
+        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+    }
+
+    let mut ebo: GLuint = 0;
+    unsafe {
+        gl::GenBuffers(1, &mut ebo);
+
+        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ebo);
+        gl::BufferData(gl::ELEMENT_ARRAY_BUFFER, (indices.len() * std::mem::size_of::<u32>()) as GLsizeiptr, indices.as_ptr() as *const GLvoid, gl::STATIC_DRAW);
+        gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, 0);
+    }
+
+    let mut vao: GLuint = 0;
+    unsafe {
+        gl::GenVertexArrays(1, &mut vao);
+
+        gl::BindVertexArray(vao);
+        gl::BindBuffer(gl::ARRAY_BUFFER, fbo);
+
+        gl::EnableVertexAttribArray(0);
+        gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, (3 * std::mem::size_of::<f32>()) as GLint, std::ptr::null());
+
+        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+        gl::BindVertexArray(0);
+    }
 
     // Main loop
     let mut ev_pump = sdl.event_pump().unwrap();
@@ -75,6 +118,15 @@ fn main() {
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
+
+        // Use main program
+        main_program.activate();
+        unsafe {
+            gl::BindVertexArray(vao);
+            gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, indices.as_ptr() as *const GLvoid);
+        }
+
+        // Display rendered scene
         window.gl_swap_window();
     }
 }
