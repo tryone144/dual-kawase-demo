@@ -182,10 +182,12 @@ fn shader_from_source(source: &CStr, kind: GLenum) -> Result<GLuint, String> {
     if success == 0 {
         // `gl::CompileShader` failed
         let mut len: GLint = 0;
-        let error = super::new_cstring_with_len(len as usize);
-
         unsafe {
             gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut len);
+        }
+
+        let error = super::new_cstring_with_len(len as usize);
+        unsafe {
             gl::GetShaderInfoLog(id, len, std::ptr::null_mut(), error.as_ptr() as *mut GLchar);
         }
 
