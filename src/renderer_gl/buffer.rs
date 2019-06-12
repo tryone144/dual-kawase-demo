@@ -57,7 +57,7 @@ impl<B: BufferType> Buffer<B> {
 impl<B: BufferType> Drop for Buffer<B> {
     fn drop(&mut self) {
         unsafe {
-            gl::DeleteBuffers(1, &mut self.vbo);
+            gl::DeleteBuffers(1, &self.vbo);
         }
     }
 }
@@ -105,8 +105,7 @@ impl VertexArray {
 impl Drop for VertexArray {
     fn drop(&mut self) {
         unsafe {
-            gl::DeleteVertexArrays(1, &mut self.vao);
+            gl::DeleteVertexArrays(1, &self.vao);
         }
     }
 }
-

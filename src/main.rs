@@ -16,9 +16,10 @@ use sdl2::render::{Texture, TextureCreator};
 use sdl2::surface::Surface;
 use sdl2::ttf::Hinting;
 
+mod blur;
 mod renderer_gl;
 
-use renderer_gl::{FragmentShader, Program, TextureQuad, VertexShader, Viewport};
+use renderer_gl::{FragmentShader, GLQuad, Program, SDLQuad, TextureQuad, VertexShader, Viewport};
 
 const WINDOW_TITLE: &str = "Dual-Filter Kawase Blur — Demo";
 const WIN_WIDTH: u32 = 1280;
@@ -84,8 +85,7 @@ fn run(image_file: &Path) {
     let mut viewport = Viewport::from_window(WIN_WIDTH, WIN_HEIGHT);
 
     let _gl_context = window.gl_create_context().expect("Cannot load GL context");
-    let _gl =
-        gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
+    gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
 
     // Load main window canvas
     let canvas = window
@@ -100,6 +100,26 @@ fn run(image_file: &Path) {
         .expect("Cannot open font");
     font.set_hinting(Hinting::Normal);
 
+    // Load image as texture
+    let image_surface = Surface::from_file(image_file).expect("Cannot load base image");
+    let mut base_texture =
+        scaled_texture_from_surface(&texture_creator, &image_surface, WIN_WIDTH, WIN_HEIGHT);
+
+    // Init full-screen image display
+    let mut background_img = GLQuad::with_texture(
+        0,
+        0,
+        base_texture.query().width,
+        base_texture.query().height,
+        viewport.size(),
+    );
+    background_img.fit_center(viewport.size());
+
+    // Init blur context
+    let mut ctx = blur::BlurContext::new();
+    //ctx.blur(&mut base_texture, &background_img);
+
+    // Init overlay text
     let text_surf = font
         .render("test")
         .blended((255, 255, 255, 255))
@@ -108,18 +128,9 @@ fn run(image_file: &Path) {
         .create_texture_from_surface(text_surf)
         .expect("Cannot convert surface to texture");
 
-    let mut overlay_test = TextureQuad::from_texture(text_texture, viewport.size());
+    let mut overlay_test = SDLQuad::from_texture(text_texture, 20, 20, viewport.size());
 
-    // Load image as texture
-    let image_surface = Surface::from_file(image_file).expect("Cannot load base image");
-    let mut base_texture =
-        scaled_texture_from_surface(&texture_creator, &image_surface, WIN_WIDTH, WIN_HEIGHT);
-
-    // Init full-screen image display
-    let mut background_img = TextureQuad::from_texture(base_texture, viewport.size());
-    background_img.fit_center(viewport.size());
-
-    // Init shader and program
+    // Init main shader and program
     let vert_shader = VertexShader::from_source(include_str!("shaders/tex_quad.vert"))
         .expect("Cannot compile vertex shader");
     let frag_shader = FragmentShader::from_source(include_str!("shaders/tex_quad.frag"))
@@ -130,14 +141,14 @@ fn run(image_file: &Path) {
 
     // Init GL state
     unsafe {
-        //gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
-        gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+        gl::ClearColor(0.2, 0.2, 0.3, 1.0);
     }
 
     viewport.activate();
 
     // Main loop
     let mut ev_pump = sdl.event_pump().unwrap();
+    let mut redraw = false;
     'mainloop: loop {
         // Handle all queued events
         for event in ev_pump.poll_iter() {
@@ -147,6 +158,7 @@ fn run(image_file: &Path) {
                     win_event: WindowEvent::Resized(w, h),
                     ..
                 } => {
+                    // Update viewport
                     viewport.update_size(w as u32, h as u32);
                     viewport.activate();
 
@@ -154,14 +166,17 @@ fn run(image_file: &Path) {
                     base_texture = scaled_texture_from_surface(
                         &texture_creator,
                         &image_surface,
-                        w as u32,
-                        h as u32,
+                        viewport.size().0,
+                        viewport.size().1,
                     );
-                    background_img.update_texture(base_texture);
+                    background_img.resize(base_texture.query().width, base_texture.query().height);
 
                     // Update vertex positions
                     background_img.fit_center(viewport.size());
                     overlay_test.update_vp(viewport.size());
+
+                    // Redraw blur
+                    redraw = true;
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Escape),
@@ -189,14 +204,23 @@ fn run(image_file: &Path) {
             }
         }
 
+        // Redraw blur texture
+        if redraw {
+            redraw = false;
+            ctx.blur(&mut base_texture, &background_img);
+        }
+
         // Draw window contents here
+        viewport.activate();
         unsafe {
+            gl::DrawBuffer(gl::BACK);
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
 
-        // Draw background texture
         main_program.activate();
-        background_img.draw(false);
+
+        // Draw background texture
+        background_img.draw(true);
 
         // Draw overlay text
         overlay_test.draw(true);
