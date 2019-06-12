@@ -50,12 +50,10 @@ impl Program {
 
             unsafe {
                 gl::GetProgramiv(program_id, gl::INFO_LOG_LENGTH, &mut len);
-                gl::GetProgramInfoLog(
-                    program_id,
-                    len,
-                    std::ptr::null_mut(),
-                    error.as_ptr() as *mut GLchar,
-                );
+                gl::GetProgramInfoLog(program_id,
+                                      len,
+                                      std::ptr::null_mut(),
+                                      error.as_ptr() as *mut GLchar);
             }
 
             return Err(error.to_string_lossy().into_owned());
@@ -74,7 +72,7 @@ impl Program {
         }
     }
 
-    //pub fn set_uniform(&self, name: &str, value: (f32, f32)) {
+    // pub fn set_uniform(&self, name: &str, value: (f32, f32)) {
     //    let uniform: GLint =
     //        unsafe { gl::GetUniformLocation(self.id(), name.as_ptr() as *const GLchar) };
 
@@ -109,10 +107,8 @@ impl<S: ShaderType> Shader<S> {
         // compile shader
         let id = shader_from_source(raw_source.as_c_str(), S::SHADER_TYPE)?;
 
-        Ok(Self {
-            id,
-            _marker: std::marker::PhantomData,
-        })
+        Ok(Self { id,
+                  _marker: std::marker::PhantomData })
     }
 
     fn id(&self) -> GLuint {

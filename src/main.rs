@@ -11,7 +11,7 @@ use std::path::Path;
 use sdl2::event::{Event, WindowEvent};
 use sdl2::gfx::framerate::FPSManager;
 use sdl2::image::{InitFlag, LoadSurface};
-use sdl2::keyboard::Keycode;
+use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::render::{Texture, TextureCreator};
 use sdl2::surface::Surface;
 use sdl2::ttf::{Font, Hinting};
@@ -42,12 +42,11 @@ fn scale_keep_aspect(base_w: u32, base_h: u32, width: u32, height: u32) -> (u32,
     }
 }
 
-fn scaled_texture_from_surface<'a, T: 'a>(
-    creator: &'a TextureCreator<T>,
-    base: &Surface,
-    width: u32,
-    height: u32,
-) -> Texture<'a> {
+fn scaled_texture_from_surface<'a, T: 'a>(creator: &'a TextureCreator<T>,
+                                          base: &Surface,
+                                          width: u32,
+                                          height: u32)
+                                          -> Texture<'a> {
     let (scaled_width, scaled_height) =
         scale_keep_aspect(base.width(), base.height(), width, height);
     let mut scaled_surface =
@@ -57,24 +56,20 @@ fn scaled_texture_from_surface<'a, T: 'a>(
     base.blit_scaled(None, &mut scaled_surface, None)
         .expect("Cannot scale base image");
 
-    creator
-        .create_texture_from_surface(scaled_surface)
-        .expect("Cannot convert image to texture")
+    creator.create_texture_from_surface(scaled_surface)
+           .expect("Cannot convert image to texture")
 }
 
 #[inline]
-fn render_to_texture<'r, T: 'r>(
-    creator: &'r TextureCreator<T>,
-    font: &Font,
-    message: &str,
-) -> Texture<'r> {
-    let text_surf = font
-        .render(message)
-        .blended((255, 255, 255, 255))
-        .expect("Cannot render text to surface");
-    creator
-        .create_texture_from_surface(text_surf)
-        .expect("Cannot convert surface to texture")
+fn render_to_texture<'r, T: 'r>(creator: &'r TextureCreator<T>,
+                                font: &Font,
+                                message: &str)
+                                -> Texture<'r> {
+    let text_surf = font.render(message)
+                        .blended((255, 255, 255, 255))
+                        .expect("Cannot render text to surface");
+    creator.create_texture_from_surface(text_surf)
+           .expect("Cannot convert surface to texture")
 }
 
 fn run(image_file: &Path) {
@@ -85,37 +80,33 @@ fn run(image_file: &Path) {
     let ttf = sdl2::ttf::init().expect("Cannot initialize ttf subsystem");
 
     let mut fps_manager = FPSManager::new();
-    fps_manager
-        .set_framerate(60)
-        .expect("Cannot set target framerate");
+    fps_manager.set_framerate(60)
+               .expect("Cannot set target framerate");
 
     let gl_attr = video_subsystem.gl_attr();
     gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
     gl_attr.set_context_version(3, 3);
 
     // Create window
-    let window = video_subsystem
-        .window(WINDOW_TITLE, WIN_WIDTH, WIN_HEIGHT)
-        .resizable()
-        .opengl()
-        .build()
-        .expect("Cannot create OpenGL window");
+    let window = video_subsystem.window(WINDOW_TITLE, WIN_WIDTH, WIN_HEIGHT)
+                                .resizable()
+                                .opengl()
+                                .build()
+                                .expect("Cannot create OpenGL window");
     let mut viewport = Viewport::from_window(WIN_WIDTH, WIN_HEIGHT);
 
     let _gl_context = window.gl_create_context().expect("Cannot load GL context");
     gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
 
     // Load main window canvas
-    let canvas = window
-        .into_canvas()
-        .build()
-        .expect("Cannot get window canvas");
+    let canvas = window.into_canvas()
+                       .build()
+                       .expect("Cannot get window canvas");
     let texture_creator = canvas.texture_creator();
 
     // Init text rendering
-    let mut font = ttf
-        .load_font("./assets/UbuntuMono-R.ttf", 16)
-        .expect("Cannot open font");
+    let mut font = ttf.load_font("./assets/UbuntuMono-R.ttf", 16)
+                      .expect("Cannot open font");
     font.set_hinting(Hinting::Normal);
 
     // Load image as texture
@@ -124,36 +115,32 @@ fn run(image_file: &Path) {
         scaled_texture_from_surface(&texture_creator, &image_surface, WIN_WIDTH, WIN_HEIGHT);
 
     // Init full-screen image display
-    let mut background_img = GLQuad::new_with_texture(
-        0,
-        0,
-        base_texture.query().width,
-        base_texture.query().height,
-        viewport.size(),
-    );
+    let mut background_img = GLQuad::new_with_texture(0,
+                                                      0,
+                                                      base_texture.query().width,
+                                                      base_texture.query().height,
+                                                      viewport.size());
     background_img.fit_center(viewport.size());
 
     // Init blur context
     let mut ctx = blur::BlurContext::new();
 
     // Init overlay text
-    let overlay_tex1 = render_to_texture(
-        &texture_creator,
-        &font,
-        &format!("{}: {}", INFO_1, ctx.iterations()),
-    );
-    let mut overlay_iterations = SDLQuad::from_texture(overlay_tex1, 20, 20, viewport.size());
-    let overlay_tex2 = render_to_texture(
-        &texture_creator,
-        &font,
-        &format!("{}: {}", INFO_2, ctx.offset()),
-    );
-    let mut overlay_offset = SDLQuad::from_texture(
-        overlay_tex2,
-        20,
-        20 + overlay_iterations.height() as i32,
-        viewport.size(),
-    );
+    let mut overlay_iterations = {
+        let overlay_tex1 = render_to_texture(&texture_creator,
+                                             &font,
+                                             &format!("{}: {}", INFO_1, ctx.iterations()));
+        SDLQuad::from_texture(overlay_tex1, 20, 20, viewport.size())
+    };
+    let mut overlay_offset = {
+        let overlay_tex2 = render_to_texture(&texture_creator,
+                                             &font,
+                                             &format!("{}: {}", INFO_2, ctx.offset()));
+        SDLQuad::from_texture(overlay_tex2,
+                              20,
+                              20 + overlay_iterations.height() as i32,
+                              viewport.size())
+    };
 
     // Init main shader and program
     let vert_shader = VertexShader::from_source(include_str!("shaders/tex_quad.vert"))
@@ -179,21 +166,17 @@ fn run(image_file: &Path) {
         for event in ev_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => break 'mainloop,
-                Event::Window {
-                    win_event: WindowEvent::Resized(w, h),
-                    ..
-                } => {
+                Event::Window { win_event: WindowEvent::Resized(w, h),
+                                .. } => {
                     // Update viewport
                     viewport.update_size(w as u32, h as u32);
                     viewport.activate();
 
                     // Update image texture
-                    base_texture = scaled_texture_from_surface(
-                        &texture_creator,
-                        &image_surface,
-                        viewport.size().0,
-                        viewport.size().1,
-                    );
+                    base_texture = scaled_texture_from_surface(&texture_creator,
+                                                               &image_surface,
+                                                               viewport.size().0,
+                                                               viewport.size().1);
                     background_img.resize(base_texture.query().width, base_texture.query().height);
 
                     // Update vertex positions
@@ -203,37 +186,63 @@ fn run(image_file: &Path) {
 
                     // Redraw blur
                     redraw = true;
-                }
-                Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Q),
-                    ..
-                } => {
+                },
+                Event::KeyDown { keycode: Some(Keycode::Escape),
+                                 .. }
+                | Event::KeyDown { keycode: Some(Keycode::Q),
+                                 .. } => {
                     break 'mainloop;
-                }
-                //Event::KeyDown { keycode: Some(Keycode::Left), .. }
-                //| Event::KeyDown { scancode: Some(Scancode::A), .. } => {
-                //},
-                //Event::KeyDown { keycode: Some(Keycode::Right), .. }
-                //| Event::KeyDown { scancode: Some(Scancode::D), .. } => {
-                //},
-                //Event::KeyDown { keycode: Some(Keycode::Up), .. }
-                //| Event::KeyDown { scancode: Some(Scancode::W), .. } => {
-                //}
-                //Event::KeyDown { keycode: Some(Keycode::Down), .. }
-                //| Event::KeyDown { scancode: Some(Scancode::S), .. } => {
-                //}
+                },
+                Event::KeyDown { keycode: Some(Keycode::Left),
+                                 .. }
+                | Event::KeyDown { scancode: Some(Scancode::A),
+                                 .. } => {
+                    if ctx.iterations() > 0 {
+                        ctx.set_iterations(ctx.iterations() - 1);
+                        redraw = true;
+                    }
+                },
+                Event::KeyDown { keycode: Some(Keycode::Right),
+                                 .. }
+                | Event::KeyDown { scancode: Some(Scancode::D),
+                                 .. } => {
+                    ctx.set_iterations(ctx.iterations() + 1);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Up),
+                                 .. }
+                | Event::KeyDown { scancode: Some(Scancode::W),
+                                 .. } => {
+                    ctx.set_offset(ctx.offset() + 1);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Down),
+                                 .. }
+                | Event::KeyDown { scancode: Some(Scancode::S),
+                                 .. } => {
+                    if ctx.offset() > 0 {
+                        ctx.set_offset(ctx.offset() - 1);
+                        redraw = true;
+                    }
+                },
                 _ => (),
             }
         }
 
-        // Redraw blur texture
         if redraw {
             redraw = false;
+            // Redraw blur texture
             ctx.blur(&mut base_texture, &background_img);
+
+            // Update overlay textures
+            let overlay_tex1 = render_to_texture(&texture_creator,
+                                                 &font,
+                                                 &format!("{}: {}", INFO_1, ctx.iterations()));
+            overlay_iterations.update_texture(overlay_tex1, viewport.size());
+            let overlay_tex2 = render_to_texture(&texture_creator,
+                                                 &font,
+                                                 &format!("{}: {}", INFO_2, ctx.offset()));
+            overlay_offset.update_texture(overlay_tex2, viewport.size());
         }
 
         // Draw window contents here
@@ -268,6 +277,6 @@ fn main() {
     }
     let image_file = Path::new(&args[1]);
 
-    println!("Hello, world!");
+    // Init graphics and run main loop
     run(image_file);
 }

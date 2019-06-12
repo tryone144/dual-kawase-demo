@@ -24,20 +24,16 @@ impl<B: BufferType> Buffer<B> {
             gl::GenBuffers(1, &mut vbo);
         }
 
-        Self {
-            vbo,
-            _marker: std::marker::PhantomData,
-        }
+        Self { vbo,
+               _marker: std::marker::PhantomData }
     }
 
     pub fn set_data<T>(&mut self, data: &[T], kind: GLenum) {
         unsafe {
-            gl::BufferData(
-                B::BUFFER_TYPE,
-                (data.len() * std::mem::size_of::<T>()) as GLsizeiptr,
-                data.as_ptr() as *const GLvoid,
-                kind,
-            );
+            gl::BufferData(B::BUFFER_TYPE,
+                           (data.len() * std::mem::size_of::<T>()) as GLsizeiptr,
+                           data.as_ptr() as *const GLvoid,
+                           kind);
         }
     }
 

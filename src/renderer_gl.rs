@@ -19,30 +19,27 @@ pub use self::shader::{FragmentShader, GlShader, Program, VertexShader};
 pub use self::viewport::Viewport;
 
 #[inline]
-pub fn centered_quad_keep_aspect(
-    width: f32,
-    height: f32,
-    win_w: f32,
-    win_h: f32,
-) -> (Vec<f32>, Vec<u32>) {
-    let vertices: Vec<f32> = vec![
-        -(width / win_w),
-        -(height / win_h),
-        0.0,
-        0.0,
-        (width / win_w),
-        -(height / win_h),
-        1.0,
-        0.0,
-        (width / win_w),
-        (height / win_h),
-        1.0,
-        1.0,
-        -(width / win_w),
-        (height / win_h),
-        0.0,
-        1.0,
-    ];
+pub fn centered_quad_keep_aspect(width: f32,
+                                 height: f32,
+                                 win_w: f32,
+                                 win_h: f32)
+                                 -> (Vec<f32>, Vec<u32>) {
+    let vertices: Vec<f32> = vec![-(width / win_w),
+                                  -(height / win_h),
+                                  0.0,
+                                  0.0,
+                                  (width / win_w),
+                                  -(height / win_h),
+                                  1.0,
+                                  0.0,
+                                  (width / win_w),
+                                  (height / win_h),
+                                  1.0,
+                                  1.0,
+                                  -(width / win_w),
+                                  (height / win_h),
+                                  0.0,
+                                  1.0,];
     let indices: Vec<u32> = vec![0, 1, 3, 1, 2, 3];
 
     (vertices, indices)
@@ -55,24 +52,22 @@ pub fn quad_at_pos(x: i32, y: i32, w: u32, h: u32, win_w: f32, win_h: f32) -> (V
     let top = win_h - y as f32;
     let bottom = win_h - (y + h as i32) as f32;
 
-    let vertices: Vec<f32> = vec![
-        (2.0 * left / win_w) - 1.0,
-        (2.0 * bottom / win_h) - 1.0,
-        0.0,
-        1.0, // 0.0,
-        (2.0 * right / win_w) - 1.0,
-        (2.0 * bottom / win_h) - 1.0,
-        1.0,
-        1.0, // 0.0,
-        (2.0 * right / win_w) - 1.0,
-        (2.0 * top / win_h) - 1.0,
-        1.0,
-        0.0, // 1.0,
-        (2.0 * left / win_w) - 1.0,
-        (2.0 * top / win_h) - 1.0,
-        0.0,
-        0.0, // 1.0,
-    ];
+    let vertices: Vec<f32> = vec![(2.0 * left / win_w) - 1.0,
+                                  (2.0 * bottom / win_h) - 1.0,
+                                  0.0,
+                                  1.0, // 0.0,
+                                  (2.0 * right / win_w) - 1.0,
+                                  (2.0 * bottom / win_h) - 1.0,
+                                  1.0,
+                                  1.0, // 0.0,
+                                  (2.0 * right / win_w) - 1.0,
+                                  (2.0 * top / win_h) - 1.0,
+                                  1.0,
+                                  0.0, // 1.0,
+                                  (2.0 * left / win_w) - 1.0,
+                                  (2.0 * top / win_h) - 1.0,
+                                  0.0,
+                                  0.0, /* 1.0, */];
     let indices: Vec<u32> = vec![0, 1, 3, 1, 2, 3];
 
     (vertices, indices)

@@ -1,0 +1,8 @@
+edition = "2018"
+overflow_delimited_expr = true
+use_field_init_shorthand = true
+reorder_impl_items = true
+normalize_comments = true
+match_block_trailing_comma = true
+imports_indent = "Visual"
+indent_style = "Visual"

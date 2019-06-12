@@ -9,9 +9,8 @@
 use gl::types::GLuint;
 use sdl2::render::Texture;
 
-use crate::renderer_gl::{
-    FragmentShader, GLQuad, Program, Quad, TextureQuad, VertexShader, Viewport,
-};
+use crate::renderer_gl::{FragmentShader, GLQuad, Program, Quad, TextureQuad, VertexShader,
+                         Viewport};
 
 pub struct BlurContext {
     iterations: u32,
@@ -38,15 +37,26 @@ impl BlurContext {
         let program = Program::from_shaders(&[vert_shader.into(), frag_shader.into()])
             .expect("Cannot link main program");
 
-        Self { iterations: 0, offset:0, fbo, program }
+        Self { iterations: 0,
+               offset: 0,
+               fbo,
+               program }
     }
 
     pub fn iterations(&self) -> u32 {
         self.iterations
     }
 
+    pub fn set_iterations(&mut self, iterations: u32) {
+        self.iterations = iterations;
+    }
+
     pub fn offset(&self) -> u32 {
         self.offset
+    }
+
+    pub fn set_offset(&mut self, offset: u32) {
+        self.offset = offset;
     }
 
     pub fn blur(&mut self, src_tex: &mut Texture, tgt_tex: &GLQuad) {
@@ -59,14 +69,12 @@ impl BlurContext {
         self.program.activate();
         unsafe {
             gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.fbo);
-            gl::FramebufferTexture2D(
-                gl::DRAW_FRAMEBUFFER,
-                gl::COLOR_ATTACHMENT0,
-                gl::TEXTURE_2D,
-                *tgt_tex.texture(),
-                0,
-            );
-            //println!(
+            gl::FramebufferTexture2D(gl::DRAW_FRAMEBUFFER,
+                                     gl::COLOR_ATTACHMENT0,
+                                     gl::TEXTURE_2D,
+                                     *tgt_tex.texture(),
+                                     0);
+            // println!(
             //    "Status: {:?}",
             //    gl::CheckFramebufferStatus(gl::DRAW_FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE
             //);

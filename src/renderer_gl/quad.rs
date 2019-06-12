@@ -29,12 +29,10 @@ impl Quad {
     pub fn new(x: i32, y: i32, width: u32, height: u32, vp_size: (u32, u32), center: bool) -> Self {
         // Create vertex and index arrays
         let (vertices, indices) = if center {
-            super::centered_quad_keep_aspect(
-                width as f32,
-                height as f32,
-                vp_size.0 as f32,
-                vp_size.1 as f32,
-            )
+            super::centered_quad_keep_aspect(width as f32,
+                                             height as f32,
+                                             vp_size.0 as f32,
+                                             vp_size.1 as f32)
         } else {
             super::quad_at_pos(x, y, width, height, vp_size.0 as f32, vp_size.1 as f32)
         };
@@ -57,41 +55,35 @@ impl Quad {
         vbo.bind();
         unsafe {
             gl::EnableVertexAttribArray(0);
-            gl::VertexAttribPointer(
-                0,
-                2,
-                gl::FLOAT,
-                gl::FALSE,
-                (4 * std::mem::size_of::<f32>()) as GLint,
-                std::ptr::null(),
-            );
+            gl::VertexAttribPointer(0,
+                                    2,
+                                    gl::FLOAT,
+                                    gl::FALSE,
+                                    (4 * std::mem::size_of::<f32>()) as GLint,
+                                    std::ptr::null());
             gl::DisableVertexAttribArray(0);
 
             gl::EnableVertexAttribArray(1);
-            gl::VertexAttribPointer(
-                1,
-                2,
-                gl::FLOAT,
-                gl::FALSE,
-                (4 * std::mem::size_of::<f32>()) as GLint,
-                (2 * std::mem::size_of::<f32>()) as *const GLvoid,
-            );
+            gl::VertexAttribPointer(1,
+                                    2,
+                                    gl::FLOAT,
+                                    gl::FALSE,
+                                    (4 * std::mem::size_of::<f32>()) as GLint,
+                                    (2 * std::mem::size_of::<f32>()) as *const GLvoid);
             gl::DisableVertexAttribArray(1);
         }
         vbo.unbind();
         vao.unbind();
 
-        Self {
-            width,
-            height,
-            x,
-            y,
-            vertices,
-            indices,
-            vbo,
-            ebo,
-            vao,
-        }
+        Self { width,
+               height,
+               x,
+               y,
+               vertices,
+               indices,
+               vbo,
+               ebo,
+               vao }
     }
 
     pub fn width(&self) -> u32 {
@@ -125,14 +117,12 @@ impl Quad {
     }
 
     pub fn update_vp(&mut self, vp_size: (u32, u32)) {
-        let (vertices, indices) = super::quad_at_pos(
-            self.x,
-            self.y,
-            self.width,
-            self.height,
-            vp_size.0 as f32,
-            vp_size.1 as f32,
-        );
+        let (vertices, indices) = super::quad_at_pos(self.x,
+                                                     self.y,
+                                                     self.width,
+                                                     self.height,
+                                                     vp_size.0 as f32,
+                                                     vp_size.1 as f32);
 
         self.vertices = vertices;
         self.indices = indices;
@@ -140,12 +130,10 @@ impl Quad {
     }
 
     pub fn fit_center(&mut self, vp_size: (u32, u32)) {
-        let (vertices, indices) = super::centered_quad_keep_aspect(
-            self.width as f32,
-            self.height as f32,
-            vp_size.0 as f32,
-            vp_size.1 as f32,
-        );
+        let (vertices, indices) = super::centered_quad_keep_aspect(self.width as f32,
+                                                                   self.height as f32,
+                                                                   vp_size.0 as f32,
+                                                                   vp_size.1 as f32);
 
         self.vertices = vertices;
         self.indices = indices;
@@ -165,12 +153,10 @@ impl Quad {
             gl::EnableVertexAttribArray(0);
             gl::EnableVertexAttribArray(1);
 
-            gl::DrawElements(
-                gl::TRIANGLES,
-                self.indices.len() as i32,
-                gl::UNSIGNED_INT,
-                self.indices.as_ptr() as *const GLvoid,
-            );
+            gl::DrawElements(gl::TRIANGLES,
+                             self.indices.len() as i32,
+                             gl::UNSIGNED_INT,
+                             self.indices.as_ptr() as *const GLvoid);
 
             gl::DisableVertexAttribArray(0);
             gl::DisableVertexAttribArray(1);
@@ -182,7 +168,7 @@ impl Quad {
 pub trait TextureQuad<T> {
     fn from_texture(tex: T, x: i32, y: i32, vp_size: (u32, u32)) -> Self;
     fn texture(&self) -> &T;
-    fn update_texture(&mut self, tex: T);
+    fn update_texture(&mut self, tex: T, vp_size: (u32, u32));
     fn draw(&mut self, blend: bool);
 }
 
@@ -215,10 +201,11 @@ impl<'r> TextureQuad<Texture<'r>> for SDLQuad<'r> {
         &self.texture
     }
 
-    fn update_texture(&mut self, tex: Texture<'r>) {
+    fn update_texture(&mut self, tex: Texture<'r>, vp_size: (u32, u32)) {
         self.texture = tex;
         self.quad
             .resize(self.texture.query().width, self.texture.query().height);
+        self.update_vp(vp_size);
     }
 
     fn draw(&mut self, blend: bool) {
@@ -243,17 +230,15 @@ impl GLQuad {
         unsafe {
             gl::GenTextures(1, &mut texture);
             gl::BindTexture(gl::TEXTURE_2D, texture);
-            gl::TexImage2D(
-                gl::TEXTURE_2D,
-                0,
-                gl::RGBA8 as i32,
-                width as i32,
-                height as i32,
-                0,
-                gl::BGRA,
-                gl::UNSIGNED_BYTE,
-                std::ptr::null(),
-            );
+            gl::TexImage2D(gl::TEXTURE_2D,
+                           0,
+                           gl::RGBA8 as i32,
+                           width as i32,
+                           height as i32,
+                           0,
+                           gl::BGRA,
+                           gl::UNSIGNED_BYTE,
+                           std::ptr::null());
             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAX_LEVEL, 0);
             gl::BindTexture(gl::TEXTURE_2D, 0);
         }
@@ -265,17 +250,15 @@ impl GLQuad {
     pub fn resize(&mut self, width: u32, height: u32) {
         unsafe {
             gl::BindTexture(gl::TEXTURE_2D, self.texture);
-            gl::TexImage2D(
-                gl::TEXTURE_2D,
-                0,
-                gl::RGBA8 as i32,
-                width as i32,
-                height as i32,
-                0,
-                gl::RGBA,
-                gl::UNSIGNED_BYTE,
-                std::ptr::null(),
-            );
+            gl::TexImage2D(gl::TEXTURE_2D,
+                           0,
+                           gl::RGBA8 as i32,
+                           width as i32,
+                           height as i32,
+                           0,
+                           gl::RGBA,
+                           gl::UNSIGNED_BYTE,
+                           std::ptr::null());
             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAX_LEVEL, 0);
             gl::BindTexture(gl::TEXTURE_2D, 0);
         }
@@ -316,7 +299,7 @@ impl TextureQuad<GLuint> for GLQuad {
         &self.texture
     }
 
-    fn update_texture(&mut self, tex: GLuint) {
+    fn update_texture(&mut self, tex: GLuint, vp_size: (u32, u32)) {
         self.texture = tex;
         let mut width: GLint = 0;
         let mut height: GLint = 0;
@@ -327,6 +310,7 @@ impl TextureQuad<GLuint> for GLQuad {
             gl::BindTexture(gl::TEXTURE_2D, 0);
         }
         self.quad.resize(width as u32, height as u32);
+        self.update_vp(vp_size);
     }
 
     fn draw(&mut self, blend: bool) {

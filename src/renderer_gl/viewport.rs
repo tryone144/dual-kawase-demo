@@ -15,12 +15,10 @@ pub struct Viewport {
 
 impl Viewport {
     pub fn from_window(width: u32, height: u32) -> Self {
-        Self {
-            x: 0,
-            y: 0,
-            w: width,
-            h: height,
-        }
+        Self { x: 0,
+               y: 0,
+               w: width,
+               h: height }
     }
 
     pub fn size(&self) -> (u32, u32) {
