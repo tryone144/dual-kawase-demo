@@ -14,6 +14,8 @@ use crate::renderer_gl::{
 };
 
 pub struct BlurContext {
+    iterations: u32,
+    offset: u32,
     fbo: GLuint,
     program: Program,
 }
@@ -36,7 +38,15 @@ impl BlurContext {
         let program = Program::from_shaders(&[vert_shader.into(), frag_shader.into()])
             .expect("Cannot link main program");
 
-        Self { fbo, program }
+        Self { iterations: 0, offset:0, fbo, program }
+    }
+
+    pub fn iterations(&self) -> u32 {
+        self.iterations
+    }
+
+    pub fn offset(&self) -> u32 {
+        self.offset
     }
 
     pub fn blur(&mut self, src_tex: &mut Texture, tgt_tex: &GLQuad) {

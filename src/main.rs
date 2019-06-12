@@ -14,7 +14,7 @@ use sdl2::image::{InitFlag, LoadSurface};
 use sdl2::keyboard::Keycode;
 use sdl2::render::{Texture, TextureCreator};
 use sdl2::surface::Surface;
-use sdl2::ttf::Hinting;
+use sdl2::ttf::{Font, Hinting};
 
 mod blur;
 mod renderer_gl;
@@ -24,6 +24,9 @@ use renderer_gl::{FragmentShader, GLQuad, Program, SDLQuad, TextureQuad, VertexS
 const WINDOW_TITLE: &str = "Dual-Filter Kawase Blur — Demo";
 const WIN_WIDTH: u32 = 1280;
 const WIN_HEIGHT: u32 = 720;
+
+const INFO_1: &str = "Down-/Upsample Iterations";
+const INFO_2: &str = "Blur Offset";
 
 #[inline]
 fn scale_keep_aspect(base_w: u32, base_h: u32, width: u32, height: u32) -> (u32, u32) {
@@ -57,6 +60,21 @@ fn scaled_texture_from_surface<'a, T: 'a>(
     creator
         .create_texture_from_surface(scaled_surface)
         .expect("Cannot convert image to texture")
+}
+
+#[inline]
+fn render_to_texture<'r, T: 'r>(
+    creator: &'r TextureCreator<T>,
+    font: &Font,
+    message: &str,
+) -> Texture<'r> {
+    let text_surf = font
+        .render(message)
+        .blended((255, 255, 255, 255))
+        .expect("Cannot render text to surface");
+    creator
+        .create_texture_from_surface(text_surf)
+        .expect("Cannot convert surface to texture")
 }
 
 fn run(image_file: &Path) {
@@ -106,7 +124,7 @@ fn run(image_file: &Path) {
         scaled_texture_from_surface(&texture_creator, &image_surface, WIN_WIDTH, WIN_HEIGHT);
 
     // Init full-screen image display
-    let mut background_img = GLQuad::with_texture(
+    let mut background_img = GLQuad::new_with_texture(
         0,
         0,
         base_texture.query().width,
@@ -117,18 +135,25 @@ fn run(image_file: &Path) {
 
     // Init blur context
     let mut ctx = blur::BlurContext::new();
-    //ctx.blur(&mut base_texture, &background_img);
 
     // Init overlay text
-    let text_surf = font
-        .render("test")
-        .blended((255, 255, 255, 255))
-        .expect("Cannot render text to texture");
-    let text_texture = texture_creator
-        .create_texture_from_surface(text_surf)
-        .expect("Cannot convert surface to texture");
-
-    let mut overlay_test = SDLQuad::from_texture(text_texture, 20, 20, viewport.size());
+    let overlay_tex1 = render_to_texture(
+        &texture_creator,
+        &font,
+        &format!("{}: {}", INFO_1, ctx.iterations()),
+    );
+    let mut overlay_iterations = SDLQuad::from_texture(overlay_tex1, 20, 20, viewport.size());
+    let overlay_tex2 = render_to_texture(
+        &texture_creator,
+        &font,
+        &format!("{}: {}", INFO_2, ctx.offset()),
+    );
+    let mut overlay_offset = SDLQuad::from_texture(
+        overlay_tex2,
+        20,
+        20 + overlay_iterations.height() as i32,
+        viewport.size(),
+    );
 
     // Init main shader and program
     let vert_shader = VertexShader::from_source(include_str!("shaders/tex_quad.vert"))
@@ -173,7 +198,8 @@ fn run(image_file: &Path) {
 
                     // Update vertex positions
                     background_img.fit_center(viewport.size());
-                    overlay_test.update_vp(viewport.size());
+                    overlay_iterations.update_vp(viewport.size());
+                    overlay_offset.update_vp(viewport.size());
 
                     // Redraw blur
                     redraw = true;
@@ -223,7 +249,8 @@ fn run(image_file: &Path) {
         background_img.draw(true);
 
         // Draw overlay text
-        overlay_test.draw(true);
+        overlay_iterations.draw(true);
+        overlay_offset.draw(true);
 
         // Display rendered scene
         canvas.window().gl_swap_window();

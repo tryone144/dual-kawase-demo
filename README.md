@@ -21,3 +21,7 @@ at your option.
 ### Contribution
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in portal-rc by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+
+## Legal
+
+The bundled [Ubuntu Monospace](./assets/UbuntuMono-R.ttf) font is licensed under the [Ubuntu Font Licence Version 1.0](./assets/ubuntu-font-license-1.0.txt) (see https://ubuntu.com/legal/font-licence) and NOT covered by the above lincenses.
