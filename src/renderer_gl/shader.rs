@@ -6,15 +6,18 @@
 // that was distributed with this source code.
 //
 
-use gl::types::{GLchar, GLenum, GLint, GLuint};
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
+
+use gl::types::{GLchar, GLenum, GLint, GLuint};
 
 pub struct Program {
     id: GLuint,
+    uniform_map: HashMap<String, GLint>,
 }
 
 impl Program {
-    pub fn from_shaders(shaders: &[GlShader]) -> Result<Self, String> {
+    pub fn from_shaders(shaders: &[GlShader], uniforms: Option<&[&str]>) -> Result<Self, String> {
         // generate new program id
         let program_id = unsafe { gl::CreateProgram() };
 
@@ -28,13 +31,6 @@ impl Program {
         // link program
         unsafe {
             gl::LinkProgram(program_id);
-        }
-
-        // detach supplied shaders to allow them to be freed
-        for shader in shaders {
-            unsafe {
-                gl::DetachShader(program_id, shader.id());
-            }
         }
 
         // check error
@@ -59,7 +55,31 @@ impl Program {
             return Err(error.to_string_lossy().into_owned());
         }
 
-        Ok(Self { id: program_id })
+        // store uniform locations
+        let mut uniform_map: HashMap<String, GLint> =
+            HashMap::with_capacity(uniforms.map_or(0, |u| u.len()));
+
+        if let Some(uniform_iter) = uniforms {
+            for uniform in uniform_iter {
+                let c_name = CString::new(*uniform).unwrap();
+                let loc =
+                    unsafe { gl::GetUniformLocation(program_id, c_name.as_ptr() as *const GLchar) };
+                if loc < 0 {
+                    return Err(format!("Cannot find location of uniform '{}'", *uniform));
+                }
+                uniform_map.insert(String::from(*uniform), loc);
+            }
+        }
+
+        // detach supplied shaders to allow them to be freed
+        for shader in shaders {
+            unsafe {
+                gl::DetachShader(program_id, shader.id());
+            }
+        }
+
+        Ok(Self { id: program_id,
+                  uniform_map })
     }
 
     pub fn _id(&self) -> GLuint {
@@ -72,14 +92,41 @@ impl Program {
         }
     }
 
-    // pub fn set_uniform(&self, name: &str, value: (f32, f32)) {
-    //    let uniform: GLint =
-    //        unsafe { gl::GetUniformLocation(self.id(), name.as_ptr() as *const GLchar) };
+    pub fn unbind(&self) {
+        unsafe {
+            gl::UseProgram(0);
+        }
+    }
 
-    //    unsafe {
-    //        gl::Uniform2f(uniform, value.0, value.1);
-    //    }
-    //}
+    pub fn set_uniform_1i(&self, name: &str, value: i32) -> Result<(), String> {
+        let loc = self.uniform_map
+                      .get(name)
+                      .ok_or_else(|| format!("Uniform location '{}' not found", name))?;
+        unsafe {
+            gl::Uniform1i(*loc, value);
+        }
+        Ok(())
+    }
+
+    pub fn set_uniform_1f(&self, name: &str, value: f32) -> Result<(), String> {
+        let loc = self.uniform_map
+                      .get(name)
+                      .ok_or_else(|| format!("Uniform location '{}' not found", name))?;
+        unsafe {
+            gl::Uniform1f(*loc, value);
+        }
+        Ok(())
+    }
+
+    pub fn set_uniform_2f(&self, name: &str, values: (f32, f32)) -> Result<(), String> {
+        let loc = self.uniform_map
+                      .get(name)
+                      .ok_or_else(|| format!("Uniform location '{}' not found", name))?;
+        unsafe {
+            gl::Uniform2f(*loc, values.0, values.1);
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Program {

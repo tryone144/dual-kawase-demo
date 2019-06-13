@@ -18,6 +18,7 @@ pub struct Quad {
     height: u32,
     x: i32,
     y: i32,
+    flip_horiz: bool,
     vertices: Vec<f32>,
     indices: Vec<u32>,
     vbo: ArrayBuffer,
@@ -26,15 +27,29 @@ pub struct Quad {
 }
 
 impl Quad {
-    pub fn new(x: i32, y: i32, width: u32, height: u32, vp_size: (u32, u32), center: bool) -> Self {
+    pub fn new(x: i32,
+               y: i32,
+               width: u32,
+               height: u32,
+               vp_size: (u32, u32),
+               center: bool,
+               flip_horiz: bool)
+               -> Self {
         // Create vertex and index arrays
         let (vertices, indices) = if center {
             super::centered_quad_keep_aspect(width as f32,
                                              height as f32,
                                              vp_size.0 as f32,
-                                             vp_size.1 as f32)
+                                             vp_size.1 as f32,
+                                             flip_horiz)
         } else {
-            super::quad_at_pos(x, y, width, height, vp_size.0 as f32, vp_size.1 as f32)
+            super::quad_at_pos(x,
+                               y,
+                               width,
+                               height,
+                               vp_size.0 as f32,
+                               vp_size.1 as f32,
+                               flip_horiz)
         };
 
         // init vertex buffer object
@@ -79,6 +94,7 @@ impl Quad {
                height,
                x,
                y,
+               flip_horiz,
                vertices,
                indices,
                vbo,
@@ -122,7 +138,8 @@ impl Quad {
                                                      self.width,
                                                      self.height,
                                                      vp_size.0 as f32,
-                                                     vp_size.1 as f32);
+                                                     vp_size.1 as f32,
+                                                     self.flip_horiz);
 
         self.vertices = vertices;
         self.indices = indices;
@@ -133,7 +150,8 @@ impl Quad {
         let (vertices, indices) = super::centered_quad_keep_aspect(self.width as f32,
                                                                    self.height as f32,
                                                                    vp_size.0 as f32,
-                                                                   vp_size.1 as f32);
+                                                                   vp_size.1 as f32,
+                                                                   self.flip_horiz);
 
         self.vertices = vertices;
         self.indices = indices;
@@ -162,6 +180,10 @@ impl Quad {
             gl::DisableVertexAttribArray(1);
         }
         self.vao.unbind();
+
+        unsafe {
+            gl::Disable(gl::BLEND);
+        }
     }
 }
 
@@ -192,8 +214,16 @@ impl<'r> DerefMut for SDLQuad<'r> {
 }
 
 impl<'r> TextureQuad<Texture<'r>> for SDLQuad<'r> {
-    fn from_texture(tex: Texture<'r>, x: i32, y: i32, vp_size: (u32, u32)) -> Self {
-        let quad = Quad::new(x, y, tex.query().width, tex.query().height, vp_size, false);
+    fn from_texture(mut tex: Texture<'r>, x: i32, y: i32, vp_size: (u32, u32)) -> Self {
+        let quad = Quad::new(x,
+                             y,
+                             tex.query().width,
+                             tex.query().height,
+                             vp_size,
+                             false,
+                             true);
+        super::set_texture_params(&mut tex);
+
         Self { texture: tex, quad }
     }
 
@@ -203,6 +233,8 @@ impl<'r> TextureQuad<Texture<'r>> for SDLQuad<'r> {
 
     fn update_texture(&mut self, tex: Texture<'r>, vp_size: (u32, u32)) {
         self.texture = tex;
+        super::set_texture_params(&mut self.texture);
+
         self.quad
             .resize(self.texture.query().width, self.texture.query().height);
         self.update_vp(vp_size);
@@ -226,42 +258,14 @@ pub struct GLQuad {
 
 impl GLQuad {
     pub fn new_with_texture(x: i32, y: i32, width: u32, height: u32, vp_size: (u32, u32)) -> Self {
-        let mut texture: GLuint = 0;
-        unsafe {
-            gl::GenTextures(1, &mut texture);
-            gl::BindTexture(gl::TEXTURE_2D, texture);
-            gl::TexImage2D(gl::TEXTURE_2D,
-                           0,
-                           gl::RGBA8 as i32,
-                           width as i32,
-                           height as i32,
-                           0,
-                           gl::BGRA,
-                           gl::UNSIGNED_BYTE,
-                           std::ptr::null());
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAX_LEVEL, 0);
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-        }
+        let texture = super::create_texture(width, height);
+        let quad = Quad::new(x, y, width as u32, height as u32, vp_size, false, false);
 
-        let quad = Quad::new(x, y, width as u32, height as u32, vp_size, false);
         Self { texture, quad }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        unsafe {
-            gl::BindTexture(gl::TEXTURE_2D, self.texture);
-            gl::TexImage2D(gl::TEXTURE_2D,
-                           0,
-                           gl::RGBA8 as i32,
-                           width as i32,
-                           height as i32,
-                           0,
-                           gl::RGBA,
-                           gl::UNSIGNED_BYTE,
-                           std::ptr::null());
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAX_LEVEL, 0);
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-        }
+        super::resize_texture(self.texture, width, height);
         self.quad.resize(width, height);
     }
 }
@@ -291,7 +295,7 @@ impl TextureQuad<GLuint> for GLQuad {
             gl::BindTexture(gl::TEXTURE_2D, 0);
         }
 
-        let quad = Quad::new(x, y, width as u32, height as u32, vp_size, false);
+        let quad = Quad::new(x, y, width as u32, height as u32, vp_size, false, true);
         Self { texture: tex, quad }
     }
 

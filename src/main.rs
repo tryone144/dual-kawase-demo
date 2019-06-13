@@ -111,6 +111,21 @@ fn run(image_file: &Path) {
 
     // Load image as texture
     let image_surface = Surface::from_file(image_file).expect("Cannot load base image");
+    // unsafe {
+    //     let surf_raw = *image_surface.raw();
+    //     let raw_pixels = surf_raw.pixels as *mut std::os::raw::c_uchar;
+    //     let pixfmt = (*surf_raw.format).BytesPerPixel as i32;
+    //     let size = surf_raw.w * surf_raw.h * pixfmt;
+
+    //     let pixels: &mut [std::os::raw::c_uchar] =
+    //         std::slice::from_raw_parts_mut(raw_pixels, size as usize);
+    //     for i in 0..(surf_raw.w / 2 * pixfmt) {
+    //         pixels[i as usize] = 255;
+    //     }
+    //     for i in (surf_raw.w / 2 * pixfmt)..(surf_raw.w * pixfmt) {
+    //         pixels[i as usize] = 128;
+    //     }
+    // }
     let mut base_texture =
         scaled_texture_from_surface(&texture_creator, &image_surface, WIN_WIDTH, WIN_HEIGHT);
 
@@ -123,7 +138,7 @@ fn run(image_file: &Path) {
     background_img.fit_center(viewport.size());
 
     // Init blur context
-    let mut ctx = blur::BlurContext::new();
+    let mut ctx = blur::BlurContext::new((background_img.width(), background_img.height()));
 
     // Init overlay text
     let mut overlay_iterations = {
@@ -148,7 +163,7 @@ fn run(image_file: &Path) {
     let frag_shader = FragmentShader::from_source(include_str!("shaders/tex_quad.frag"))
         .expect("Cannot compile fragment shader");
 
-    let main_program = Program::from_shaders(&[vert_shader.into(), frag_shader.into()])
+    let main_program = Program::from_shaders(&[vert_shader.into(), frag_shader.into()], None)
         .expect("Cannot link main program");
 
     // Init GL state
@@ -177,7 +192,11 @@ fn run(image_file: &Path) {
                                                                &image_surface,
                                                                viewport.size().0,
                                                                viewport.size().1);
-                    background_img.resize(base_texture.query().width, base_texture.query().height);
+                    renderer_gl::set_texture_params(&mut base_texture);
+                    let base_w = base_texture.query().width;
+                    let base_h = base_texture.query().height;
+                    background_img.resize(base_w, base_h);
+                    ctx.resize(base_w, base_h);
 
                     // Update vertex positions
                     background_img.fit_center(viewport.size());
@@ -225,6 +244,14 @@ fn run(image_file: &Path) {
                         redraw = true;
                     }
                 },
+                Event::KeyDown { scancode: Some(Scancode::R),
+                                 .. } => {
+                    if ctx.offset() != 0 || ctx.iterations() != 0 {
+                        ctx.set_offset(0);
+                        ctx.set_iterations(0);
+                        redraw = true;
+                    }
+                },
                 _ => (),
             }
         }
@@ -260,6 +287,8 @@ fn run(image_file: &Path) {
         // Draw overlay text
         overlay_iterations.draw(true);
         overlay_offset.draw(true);
+
+        main_program.unbind();
 
         // Display rendered scene
         canvas.window().gl_swap_window();
