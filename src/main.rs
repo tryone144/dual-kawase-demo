@@ -150,7 +150,7 @@ fn run(image_file: &Path) {
     let mut overlay_offset = {
         let overlay_tex2 = render_to_texture(&texture_creator,
                                              &font,
-                                             &format!("{}: {}", INFO_2, ctx.offset()));
+                                             &format!("{}: {:.02}", INFO_2, ctx.offset()));
         SDLQuad::from_texture(overlay_tex2,
                               20,
                               20 + overlay_iterations.height() as i32,
@@ -226,9 +226,9 @@ fn run(image_file: &Path) {
                                  .. }
                 | Event::KeyDown { scancode: Some(Scancode::D),
                                  .. } => {
-                    let scale = 1 << ctx.iterations();
+                    let scale = 1 << (ctx.iterations() + 1);
                     let base = base_texture.query();
-                    if base.width / scale > 5 || base.height / scale > 5 {
+                    if base.width / scale > 10 || base.height / scale > 10 {
                         ctx.set_iterations(ctx.iterations() + 1);
                         redraw = true;
                     }
@@ -237,8 +237,11 @@ fn run(image_file: &Path) {
                                  .. }
                 | Event::KeyDown { scancode: Some(Scancode::W),
                                  .. } => {
-                    if ctx.offset() < 100 {
-                        ctx.set_offset(ctx.offset() + 1);
+                    if ctx.offset() < 25.0 {
+                        ctx.set_offset(ctx.offset() + 0.25);
+                        redraw = true;
+                    } else {
+                        ctx.set_offset(25.0);
                         redraw = true;
                     }
                 },
@@ -246,15 +249,17 @@ fn run(image_file: &Path) {
                                  .. }
                 | Event::KeyDown { scancode: Some(Scancode::S),
                                  .. } => {
-                    if ctx.offset() > 0 {
-                        ctx.set_offset(ctx.offset() - 1);
-                        redraw = true;
+                    if ctx.offset() > 0.0 {
+                        ctx.set_offset(ctx.offset() - 0.25);
+                    } else {
+                        ctx.set_offset(0.0);
                     }
+                    redraw = true;
                 },
                 Event::KeyDown { scancode: Some(Scancode::R),
                                  .. } => {
-                    if ctx.offset() != 0 || ctx.iterations() != 0 {
-                        ctx.set_offset(0);
+                    if ctx.offset() > 0.0 || ctx.iterations() != 0 {
+                        ctx.set_offset(0.0);
                         ctx.set_iterations(0);
                         redraw = true;
                     }
@@ -275,7 +280,7 @@ fn run(image_file: &Path) {
             overlay_iterations.update_texture(overlay_tex1, viewport.size());
             let overlay_tex2 = render_to_texture(&texture_creator,
                                                  &font,
-                                                 &format!("{}: {}", INFO_2, ctx.offset()));
+                                                 &format!("{}: {:.02}", INFO_2, ctx.offset()));
             overlay_offset.update_texture(overlay_tex2, viewport.size());
         }
 

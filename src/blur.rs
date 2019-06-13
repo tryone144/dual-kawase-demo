@@ -14,7 +14,7 @@ use crate::renderer_gl::{FragmentShader, GLQuad, Program, Quad, TextureQuad, Ver
 
 pub struct BlurContext {
     iterations: u32,
-    offset: u32,
+    offset: f32,
     fbo: GLuint,
     swap_tex: (GLuint, GLuint),
     copy_program: Program,
@@ -62,7 +62,7 @@ impl BlurContext {
             .expect("Cannot link upsample program");
 
         Self { iterations: 0,
-               offset: 0,
+               offset: 0.0,
                fbo,
                swap_tex: (tex1, tex2),
                copy_program,
@@ -83,11 +83,11 @@ impl BlurContext {
         self.iterations = iterations;
     }
 
-    pub fn offset(&self) -> u32 {
+    pub fn offset(&self) -> f32 {
         self.offset
     }
 
-    pub fn set_offset(&mut self, offset: u32) {
+    pub fn set_offset(&mut self, offset: f32) {
         self.offset = offset;
     }
 
@@ -151,8 +151,8 @@ impl BlurContext {
         if self.iterations() == 0 {
             self.copy(&mut quad, source_tex, *target_quad.texture());
         } else {
-            let tgt_width = src_width as f32 / 2.0;
-            let tgt_height = src_height as f32 / 2.0;
+            let tgt_width = src_width as f32;
+            let tgt_height = src_height as f32;
 
             // Downsample
             self.down_program.activate();

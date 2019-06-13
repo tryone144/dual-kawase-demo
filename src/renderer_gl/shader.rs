@@ -127,16 +127,6 @@ impl Program {
         }
         Ok(())
     }
-
-    pub fn set_uniform_4f(&self, name: &str, values: (f32, f32, f32, f32)) -> Result<(), String> {
-        let loc = self.uniform_map
-                      .get(name)
-                      .ok_or_else(|| format!("Uniform location '{}' not found", name))?;
-        unsafe {
-            gl::Uniform4f(*loc, values.0, values.1, values.2, values.3);
-        }
-        Ok(())
-    }
 }
 
 impl Drop for Program {
