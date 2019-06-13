@@ -169,6 +169,7 @@ fn run(image_file: &Path) {
     // Init GL state
     unsafe {
         gl::ClearColor(0.2, 0.2, 0.3, 1.0);
+        gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
     }
 
     viewport.activate();
@@ -225,15 +226,21 @@ fn run(image_file: &Path) {
                                  .. }
                 | Event::KeyDown { scancode: Some(Scancode::D),
                                  .. } => {
-                    ctx.set_iterations(ctx.iterations() + 1);
-                    redraw = true;
+                    let scale = 1 << ctx.iterations();
+                    let base = base_texture.query();
+                    if base.width / scale > 5 || base.height / scale > 5 {
+                        ctx.set_iterations(ctx.iterations() + 1);
+                        redraw = true;
+                    }
                 },
                 Event::KeyDown { keycode: Some(Keycode::Up),
                                  .. }
                 | Event::KeyDown { scancode: Some(Scancode::W),
                                  .. } => {
-                    ctx.set_offset(ctx.offset() + 1);
-                    redraw = true;
+                    if ctx.offset() < 100 {
+                        ctx.set_offset(ctx.offset() + 1);
+                        redraw = true;
+                    }
                 },
                 Event::KeyDown { keycode: Some(Keycode::Down),
                                  .. }

@@ -118,6 +118,10 @@ impl BlurContext {
         }
     }
 
+    fn swap_textures(&mut self) {
+        self.swap_tex = (self.swap_tex.1, self.swap_tex.0);
+    }
+
     fn copy(&mut self, rect: &mut Quad, src: &mut Texture, tgt: GLuint) {
         self.bind_fbo(tgt).expect("Failed to activate framebuffer");
         self.copy_program.activate();
@@ -135,80 +139,111 @@ impl BlurContext {
         self.unbind_fbo();
     }
 
-    pub fn blur(&mut self, src_tex: &mut Texture, tgt_tex: &GLQuad) {
-        let src_width = src_tex.query().width;
-        let src_height = src_tex.query().height;
+    pub fn blur(&mut self, source_tex: &mut Texture, target_quad: &GLQuad) {
+        let src_width = source_tex.query().width;
+        let src_height = source_tex.query().height;
 
-        let vp = Viewport::from_window(tgt_tex.width(), tgt_tex.height());
+        let vp = Viewport::from_window(target_quad.width(), target_quad.height());
         let mut quad = Quad::new(0, 0, src_width, src_height, vp.size(), true, true);
 
         vp.activate();
 
         if self.iterations() == 0 {
-            self.copy(&mut quad, src_tex, *tgt_tex.texture());
+            self.copy(&mut quad, source_tex, *target_quad.texture());
         } else {
-            // Downsample
-            let mut tgt_width = src_width as f32 / 2.0;
-            let mut tgt_height = src_height as f32 / 2.0;
+            let tgt_width = src_width as f32 / 2.0;
+            let tgt_height = src_height as f32 / 2.0;
 
+            // Downsample
             self.down_program.activate();
             self.down_program
-                .set_uniform_1i("iteration", 1)
+                .set_uniform_1f("offset", self.offset() as f32)
                 .expect("Cannot set downsample uniform");
             self.down_program
                 .set_uniform_2f("halfpixel", (0.5 / tgt_width, 0.5 / tgt_height))
                 .expect("Cannot set downsample uniform");
-            self.down_program
-                .set_uniform_1f("offset", self.offset() as f32)
-                .expect("Cannot set downsample uniform");
 
-            self.bind_fbo(self.swap_tex.0)
-                .expect("Failed to activate framebuffer");
+            for iteration in 0..self.iterations() {
+                self.down_program
+                    .set_uniform_1i("iteration", iteration as i32)
+                    //.set_uniform_1i("iteration", 1)
+                    .expect("Cannot set downsample uniform");
 
-            unsafe {
-                gl::Clear(gl::COLOR_BUFFER_BIT);
-                src_tex.gl_bind_texture();
-            }
-            quad.draw(false);
-            unsafe {
-                src_tex.gl_unbind_texture();
+                self.bind_fbo(self.swap_tex.1)
+                    .expect("Failed to activate framebuffer");
+
+                unsafe {
+                    gl::Clear(gl::COLOR_BUFFER_BIT);
+                    if iteration == 0 {
+                        // first iteration: copy from source
+                        source_tex.gl_bind_texture();
+                    } else {
+                        // copy from last iteration
+                        gl::BindTexture(gl::TEXTURE_2D, self.swap_tex.0);
+                    }
+                }
+
+                // draw texture to fbo
+                quad.draw(false);
+                unsafe {
+                    if iteration == 0 {
+                        // first iteration: unbind source
+                        source_tex.gl_unbind_texture();
+                    }
+                }
+
+                // swap source and target textures
+                self.swap_textures();
             }
 
             self.down_program.unbind();
-            self.unbind_fbo();
 
             // Upsample
-            tgt_width = tgt_tex.width() as f32;
-            tgt_height = tgt_tex.height() as f32;
-
             self.up_program.activate();
             self.up_program
-                .set_uniform_1i("iteration", 1)
+                .set_uniform_1f("offset", self.offset() as f32)
                 .expect("Cannot set upsample uniform");
             self.up_program
                 .set_uniform_2f("halfpixel", (0.5 / tgt_width, 0.5 / tgt_height))
-                .expect("Cannot set upsample uniform");
-            self.up_program
-                .set_uniform_1f("offset", self.offset() as f32)
                 .expect("Cannot set upsample uniform");
             self.up_program
                 .set_uniform_1f("opacity", 1.0)
                 .expect("Cannot set upsample uniform");
 
-            self.bind_fbo(*tgt_tex.texture())
-                .expect("Failed to activate framebuffer");
+            for iteration in (0..self.iterations()).rev() {
+                self.up_program
+                    .set_uniform_1i("iteration", iteration as i32)
+                    .expect("Cannot set upsample uniform");
+                // self.up_program
+                //    .set_uniform_1f("opacity", 1.0)
+                //    .expect("Cannot set upsample uniform");
 
-            unsafe {
-                gl::Clear(gl::COLOR_BUFFER_BIT);
-                gl::BindTexture(gl::TEXTURE_2D, self.swap_tex.0);
+                if iteration == 0 {
+                    // last iteration: write to target
+                    self.bind_fbo(*target_quad.texture())
+                        .expect("Failed to activate framebuffer");
+                } else {
+                    // write to next iteration
+                    self.bind_fbo(self.swap_tex.1)
+                        .expect("Failed to activate framebuffer");
+                }
+
+                // draw texture to fbo
+                unsafe {
+                    gl::Clear(gl::COLOR_BUFFER_BIT);
+                    gl::BindTexture(gl::TEXTURE_2D, self.swap_tex.0);
+                }
+                quad.draw(false);
+
+                // swap source and target textures
+                self.swap_textures();
             }
-            quad.draw(false);
+
+            self.unbind_fbo();
+            self.up_program.unbind();
             unsafe {
                 gl::BindTexture(gl::TEXTURE_2D, 0);
             }
-
-            self.up_program.unbind();
-            self.unbind_fbo();
         }
     }
 }
