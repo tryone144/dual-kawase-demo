@@ -3,9 +3,20 @@ dual-kawase-demo
 
 **Simple live demo of the dual-filter kawase blur algorithm.**
 
-**Work In Progress!**
-
 This is just a simple test project as of now. It might kill your cat!
+
+## Build
+
+Just clone this repo and build with `cargo`:
+
+```sh
+$ git clone https://github.com/tryone144/dual-kawase-demo && cd dual-kawase-demo
+$ cargo build
+$ cargo run -- /path/to/image.(png|jpg)
+```
+
+You can then modify the number of iterations and the pixel offset width the arrow-keys.
+Reset all parameters with `r` and save the blurred image to a file with `s`.
 
 ---
 
