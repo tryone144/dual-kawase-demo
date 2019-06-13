@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 sdl2 = { version = "0.32", features = ["image", "ttf", "gfx"] }
 gl = "0.12"
+image = "0.21"

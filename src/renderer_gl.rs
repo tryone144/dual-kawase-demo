@@ -7,8 +7,10 @@
 //
 
 use std::ffi::CString;
+use std::path::Path;
+use std::thread;
 
-use gl::types::GLuint;
+use gl::types::{GLint, GLuint, GLvoid};
 use sdl2::render::Texture;
 
 mod buffer;
@@ -77,6 +79,45 @@ pub fn set_texture_params<'r>(tex: &mut Texture<'r>) {
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
         tex.gl_unbind_texture();
     }
+}
+
+pub fn save_texture_to_png(tex: GLuint, filename: &Path) {
+    // get texture size
+    let mut width: GLint = 0;
+    let mut height: GLint = 0;
+    unsafe {
+        gl::BindTexture(gl::TEXTURE_2D, tex);
+        gl::GetTexLevelParameteriv(gl::TEXTURE_2D, 0, gl::TEXTURE_WIDTH, &mut width);
+        gl::GetTexLevelParameteriv(gl::TEXTURE_2D, 0, gl::TEXTURE_HEIGHT, &mut height);
+    }
+
+    // get texture pixels
+    let size: usize = width as usize * height as usize * 4;
+    let mut pixel_buf: Vec<u8> = Vec::with_capacity(size);
+    pixel_buf.extend([0u8].iter().cycle().take(size));
+    unsafe {
+        gl::BindTexture(gl::TEXTURE_2D, tex);
+        gl::GetTexImage(gl::TEXTURE_2D,
+                        0,
+                        gl::RGBA,
+                        gl::UNSIGNED_BYTE,
+                        pixel_buf.as_ptr() as *mut GLvoid);
+        gl::BindTexture(gl::TEXTURE_2D, 0);
+    }
+
+    // save pixels to file
+    let fname = filename.to_owned();
+    thread::spawn(move || {
+        match image::save_buffer(fname,
+                                 &pixel_buf,
+                                 width as u32,
+                                 height as u32,
+                                 image::RGBA(8)).map_err(|e| e.to_string())
+        {
+            Ok(_) => println!("Save complete"),
+            Err(msg) => eprintln!("Cannot save blurred image: {}", msg),
+        }
+    });
 }
 
 #[inline]

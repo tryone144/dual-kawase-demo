@@ -214,8 +214,6 @@ fn run(image_file: &Path) {
                     break 'mainloop;
                 },
                 Event::KeyDown { keycode: Some(Keycode::Left),
-                                 .. }
-                | Event::KeyDown { scancode: Some(Scancode::A),
                                  .. } => {
                     if ctx.iterations() > 0 {
                         ctx.set_iterations(ctx.iterations() - 1);
@@ -223,8 +221,6 @@ fn run(image_file: &Path) {
                     }
                 },
                 Event::KeyDown { keycode: Some(Keycode::Right),
-                                 .. }
-                | Event::KeyDown { scancode: Some(Scancode::D),
                                  .. } => {
                     let scale = 1 << (ctx.iterations() + 1);
                     let base = base_texture.query();
@@ -234,8 +230,6 @@ fn run(image_file: &Path) {
                     }
                 },
                 Event::KeyDown { keycode: Some(Keycode::Up),
-                                 .. }
-                | Event::KeyDown { scancode: Some(Scancode::W),
                                  .. } => {
                     if ctx.offset() < 25.0 {
                         ctx.set_offset(ctx.offset() + 0.25);
@@ -246,8 +240,6 @@ fn run(image_file: &Path) {
                     }
                 },
                 Event::KeyDown { keycode: Some(Keycode::Down),
-                                 .. }
-                | Event::KeyDown { scancode: Some(Scancode::S),
                                  .. } => {
                     if ctx.offset() > 0.0 {
                         ctx.set_offset(ctx.offset() - 0.25);
@@ -255,6 +247,22 @@ fn run(image_file: &Path) {
                         ctx.set_offset(0.0);
                     }
                     redraw = true;
+                },
+                Event::KeyDown { scancode: Some(Scancode::S),
+                                 .. } => {
+                    let mut count = 0;
+                    let mut fname;
+                    loop {
+                        count += 1;
+                        fname = format!("blurresult_{}.png", count);
+                        if !Path::new(&fname).exists() {
+                            break;
+                        }
+                    }
+                    let path = Path::new(&fname);
+
+                    println!("Save image to {:?}", path);
+                    renderer_gl::save_texture_to_png(*background_img.texture(), path);
                 },
                 Event::KeyDown { scancode: Some(Scancode::R),
                                  .. } => {
