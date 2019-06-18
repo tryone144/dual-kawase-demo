@@ -17,6 +17,7 @@ $ cargo run -- /path/to/image.(png|jpg)
 
 You can then modify the number of iterations and the pixel offset width the arrow-keys.
 Reset all parameters with `r` and save the blurred image to a file with `s`.
+Some (arbitrary) presets are available via the number keys `1` to `9`.
 
 ---
 

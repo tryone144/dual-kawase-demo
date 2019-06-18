@@ -187,7 +187,63 @@ fn run(image_file: &Path) {
                     println!("Save image to {:?}", path);
                     renderer_gl::save_texture_to_png(*background_img.texture(), path);
                 },
-                Event::KeyDown { scancode: Some(Scancode::R),
+                Event::KeyDown { keycode: Some(Keycode::Num1),
+                                 .. } => {
+                    ctx.set_iterations(1);
+                    ctx.set_offset(1.5);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Num2),
+                                 .. } => {
+                    ctx.set_iterations(1);
+                    ctx.set_offset(2.0);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Num3),
+                                 .. } => {
+                    ctx.set_iterations(2);
+                    ctx.set_offset(2.5);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Num4),
+                                 .. } => {
+                    ctx.set_iterations(2);
+                    ctx.set_offset(3.0);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Num5),
+                                 .. } => {
+                    ctx.set_iterations(3);
+                    ctx.set_offset(2.75);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Num6),
+                                 .. } => {
+                    ctx.set_iterations(3);
+                    ctx.set_offset(3.5);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Num7),
+                                 .. } => {
+                    ctx.set_iterations(3);
+                    ctx.set_offset(4.25);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Num8),
+                                 .. } => {
+                    ctx.set_iterations(3);
+                    ctx.set_offset(5.0);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Num9),
+                                 .. } => {
+                    ctx.set_iterations(4);
+                    ctx.set_offset(3.75);
+                    redraw = true;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Num0),
+                                 .. }
+                | Event::KeyDown { scancode: Some(Scancode::R),
                                  .. } => {
                     if ctx.offset() > 0.0 || ctx.iterations() != 0 {
                         ctx.set_offset(0.0);
