@@ -37,19 +37,19 @@ impl Quad {
                -> Self {
         // Create vertex and index arrays
         let (vertices, indices) = if center {
-            super::centered_quad_keep_aspect(width as f32,
-                                             height as f32,
-                                             vp_size.0 as f32,
-                                             vp_size.1 as f32,
-                                             flip_horiz)
+            crate::utils::centered_quad_keep_aspect(width as f32,
+                                                    height as f32,
+                                                    vp_size.0 as f32,
+                                                    vp_size.1 as f32,
+                                                    flip_horiz)
         } else {
-            super::quad_at_pos(x,
-                               y,
-                               width,
-                               height,
-                               vp_size.0 as f32,
-                               vp_size.1 as f32,
-                               flip_horiz)
+            crate::utils::quad_at_pos(x,
+                                      y,
+                                      width,
+                                      height,
+                                      vp_size.0 as f32,
+                                      vp_size.1 as f32,
+                                      flip_horiz)
         };
 
         // init vertex buffer object
@@ -133,13 +133,13 @@ impl Quad {
     }
 
     pub fn update_vp(&mut self, vp_size: (u32, u32)) {
-        let (vertices, indices) = super::quad_at_pos(self.x,
-                                                     self.y,
-                                                     self.width,
-                                                     self.height,
-                                                     vp_size.0 as f32,
-                                                     vp_size.1 as f32,
-                                                     self.flip_horiz);
+        let (vertices, indices) = crate::utils::quad_at_pos(self.x,
+                                                            self.y,
+                                                            self.width,
+                                                            self.height,
+                                                            vp_size.0 as f32,
+                                                            vp_size.1 as f32,
+                                                            self.flip_horiz);
 
         self.vertices = vertices;
         self.indices = indices;
@@ -147,11 +147,11 @@ impl Quad {
     }
 
     pub fn fit_center(&mut self, vp_size: (u32, u32)) {
-        let (vertices, indices) = super::centered_quad_keep_aspect(self.width as f32,
-                                                                   self.height as f32,
-                                                                   vp_size.0 as f32,
-                                                                   vp_size.1 as f32,
-                                                                   self.flip_horiz);
+        let (vertices, indices) = crate::utils::centered_quad_keep_aspect(self.width as f32,
+                                                                          self.height as f32,
+                                                                          vp_size.0 as f32,
+                                                                          vp_size.1 as f32,
+                                                                          self.flip_horiz);
 
         self.vertices = vertices;
         self.indices = indices;

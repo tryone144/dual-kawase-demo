@@ -12,12 +12,12 @@ use sdl2::event::{Event, WindowEvent};
 use sdl2::gfx::framerate::FPSManager;
 use sdl2::image::{InitFlag, LoadSurface};
 use sdl2::keyboard::{Keycode, Scancode};
-use sdl2::render::{Texture, TextureCreator};
 use sdl2::surface::Surface;
-use sdl2::ttf::{Font, Hinting};
+use sdl2::ttf::Hinting;
 
 mod blur;
 mod renderer_gl;
+mod utils;
 
 use renderer_gl::{FragmentShader, GLQuad, Program, SDLQuad, TextureQuad, VertexShader, Viewport};
 
@@ -27,50 +27,6 @@ const WIN_HEIGHT: u32 = 720;
 
 const INFO_1: &str = "Down-/Upsample Iterations";
 const INFO_2: &str = "Blur Offset";
-
-#[inline]
-fn scale_keep_aspect(base_w: u32, base_h: u32, width: u32, height: u32) -> (u32, u32) {
-    let base_ratio: f32 = base_w as f32 / base_h as f32;
-    let scale_ratio: f32 = width as f32 / height as f32;
-
-    if scale_ratio < base_ratio {
-        // dest is taller -> fit to width
-        (width, (width as f32 / base_ratio) as u32)
-    } else {
-        // dest is wider -> fit to height
-        ((height as f32 * base_ratio) as u32, height)
-    }
-}
-
-fn scaled_texture_from_surface<'a, T: 'a>(creator: &'a TextureCreator<T>,
-                                          base: &Surface,
-                                          width: u32,
-                                          height: u32)
-                                          -> Texture<'a> {
-    let (scaled_width, scaled_height) =
-        scale_keep_aspect(base.width(), base.height(), width, height);
-    let mut scaled_surface =
-        Surface::new(scaled_width, scaled_height, creator.default_pixel_format())
-            .expect("Cannot create temporary surface");
-
-    base.blit_scaled(None, &mut scaled_surface, None)
-        .expect("Cannot scale base image");
-
-    creator.create_texture_from_surface(scaled_surface)
-           .expect("Cannot convert image to texture")
-}
-
-#[inline]
-fn render_to_texture<'r, T: 'r>(creator: &'r TextureCreator<T>,
-                                font: &Font,
-                                message: &str)
-                                -> Texture<'r> {
-    let text_surf = font.render(message)
-                        .blended((255, 255, 255, 255))
-                        .expect("Cannot render text to surface");
-    creator.create_texture_from_surface(text_surf)
-           .expect("Cannot convert surface to texture")
-}
 
 fn run(image_file: &Path) {
     // Init SDL2 with subsystems
@@ -111,23 +67,10 @@ fn run(image_file: &Path) {
 
     // Load image as texture
     let image_surface = Surface::from_file(image_file).expect("Cannot load base image");
-    // unsafe {
-    //     let surf_raw = *image_surface.raw();
-    //     let raw_pixels = surf_raw.pixels as *mut std::os::raw::c_uchar;
-    //     let pixfmt = (*surf_raw.format).BytesPerPixel as i32;
-    //     let size = surf_raw.w * surf_raw.h * pixfmt;
-
-    //     let pixels: &mut [std::os::raw::c_uchar] =
-    //         std::slice::from_raw_parts_mut(raw_pixels, size as usize);
-    //     for i in 0..(surf_raw.w / 2 * pixfmt) {
-    //         pixels[i as usize] = 255;
-    //     }
-    //     for i in (surf_raw.w / 2 * pixfmt)..(surf_raw.w * pixfmt) {
-    //         pixels[i as usize] = 128;
-    //     }
-    // }
-    let mut base_texture =
-        scaled_texture_from_surface(&texture_creator, &image_surface, WIN_WIDTH, WIN_HEIGHT);
+    let mut base_texture = renderer_gl::scaled_texture_from_surface(&texture_creator,
+                                                                    &image_surface,
+                                                                    WIN_WIDTH,
+                                                                    WIN_HEIGHT);
 
     // Init full-screen image display
     let mut background_img = GLQuad::new_with_texture(0,
@@ -142,15 +85,17 @@ fn run(image_file: &Path) {
 
     // Init overlay text
     let mut overlay_iterations = {
-        let overlay_tex1 = render_to_texture(&texture_creator,
-                                             &font,
-                                             &format!("{}: {}", INFO_1, ctx.iterations()));
+        let overlay_tex1 =
+            renderer_gl::render_to_texture(&texture_creator,
+                                           &font,
+                                           &format!("{}: {}", INFO_1, ctx.iterations()));
         SDLQuad::from_texture(overlay_tex1, 20, 20, viewport.size())
     };
     let mut overlay_offset = {
-        let overlay_tex2 = render_to_texture(&texture_creator,
-                                             &font,
-                                             &format!("{}: {:.02}", INFO_2, ctx.offset()));
+        let overlay_tex2 =
+            renderer_gl::render_to_texture(&texture_creator,
+                                           &font,
+                                           &format!("{}: {:.02}", INFO_2, ctx.offset()));
         SDLQuad::from_texture(overlay_tex2,
                               20,
                               20 + overlay_iterations.height() as i32,
@@ -189,10 +134,10 @@ fn run(image_file: &Path) {
                     viewport.activate();
 
                     // Update image texture
-                    base_texture = scaled_texture_from_surface(&texture_creator,
-                                                               &image_surface,
-                                                               viewport.size().0,
-                                                               viewport.size().1);
+                    base_texture = renderer_gl::scaled_texture_from_surface(&texture_creator,
+                                                                            &image_surface,
+                                                                            viewport.size().0,
+                                                                            viewport.size().1);
                     renderer_gl::set_texture_params(&mut base_texture);
                     let base_w = base_texture.query().width;
                     let base_h = base_texture.query().height;
@@ -282,13 +227,15 @@ fn run(image_file: &Path) {
             ctx.blur(&mut base_texture, &background_img);
 
             // Update overlay textures
-            let overlay_tex1 = render_to_texture(&texture_creator,
-                                                 &font,
-                                                 &format!("{}: {}", INFO_1, ctx.iterations()));
+            let overlay_tex1 =
+                renderer_gl::render_to_texture(&texture_creator,
+                                               &font,
+                                               &format!("{}: {}", INFO_1, ctx.iterations()));
             overlay_iterations.update_texture(overlay_tex1, viewport.size());
-            let overlay_tex2 = render_to_texture(&texture_creator,
-                                                 &font,
-                                                 &format!("{}: {:.02}", INFO_2, ctx.offset()));
+            let overlay_tex2 =
+                renderer_gl::render_to_texture(&texture_creator,
+                                               &font,
+                                               &format!("{}: {:.02}", INFO_2, ctx.offset()));
             overlay_offset.update_texture(overlay_tex2, viewport.size());
         }
 

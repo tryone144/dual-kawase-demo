@@ -42,7 +42,7 @@ impl Program {
         if success == 0 {
             // `gl::LinkProgram` failed
             let mut len: GLint = 0;
-            let error = super::new_cstring_with_len(len as usize);
+            let error = crate::utils::new_cstring_with_len(len as usize);
 
             unsafe {
                 gl::GetProgramiv(program_id, gl::INFO_LOG_LENGTH, &mut len);
@@ -233,7 +233,7 @@ fn shader_from_source(source: &CStr, kind: GLenum) -> Result<GLuint, String> {
             gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut len);
         }
 
-        let error = super::new_cstring_with_len(len as usize);
+        let error = crate::utils::new_cstring_with_len(len as usize);
         unsafe {
             gl::GetShaderInfoLog(id, len, std::ptr::null_mut(), error.as_ptr() as *mut GLchar);
         }

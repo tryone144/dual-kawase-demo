@@ -6,12 +6,13 @@
 // that was distributed with this source code.
 //
 
-use std::ffi::CString;
 use std::path::Path;
 use std::thread;
 
 use gl::types::{GLint, GLuint, GLvoid};
-use sdl2::render::Texture;
+use sdl2::render::{Texture, TextureCreator};
+use sdl2::surface::Surface;
+use sdl2::ttf::Font;
 
 mod buffer;
 mod quad;
@@ -81,6 +82,36 @@ pub fn set_texture_params<'r>(tex: &mut Texture<'r>) {
     }
 }
 
+pub fn scaled_texture_from_surface<'a, T: 'a>(creator: &'a TextureCreator<T>,
+                                              base: &Surface,
+                                              width: u32,
+                                              height: u32)
+                                              -> Texture<'a> {
+    let (scaled_width, scaled_height) =
+        crate::utils::scale_keep_aspect(base.width(), base.height(), width, height);
+    let mut scaled_surface =
+        Surface::new(scaled_width, scaled_height, creator.default_pixel_format())
+            .expect("Cannot create temporary surface");
+
+    base.blit_scaled(None, &mut scaled_surface, None)
+        .expect("Cannot scale base image");
+
+    creator.create_texture_from_surface(scaled_surface)
+           .expect("Cannot convert image to texture")
+}
+
+#[inline]
+pub fn render_to_texture<'r, T: 'r>(creator: &'r TextureCreator<T>,
+                                    font: &Font,
+                                    message: &str)
+                                    -> Texture<'r> {
+    let text_surf = font.render(message)
+                        .blended((255, 255, 255, 255))
+                        .expect("Cannot render text to surface");
+    creator.create_texture_from_surface(text_surf)
+           .expect("Cannot convert surface to texture")
+}
+
 pub fn save_texture_to_png(tex: GLuint, filename: &Path) {
     // get texture size
     let mut width: GLint = 0;
@@ -118,76 +149,4 @@ pub fn save_texture_to_png(tex: GLuint, filename: &Path) {
             Err(msg) => eprintln!("Cannot save blurred image: {}", msg),
         }
     });
-}
-
-#[inline]
-pub fn centered_quad_keep_aspect(width: f32,
-                                 height: f32,
-                                 win_w: f32,
-                                 win_h: f32,
-                                 flip_h: bool)
-                                 -> (Vec<f32>, Vec<u32>) {
-    let vertices: Vec<f32> = vec![-(width / win_w),
-                                  -(height / win_h),
-                                  0.0,
-                                  if flip_h { 0.0 } else { 1.0 },
-                                  (width / win_w),
-                                  -(height / win_h),
-                                  1.0,
-                                  if flip_h { 0.0 } else { 1.0 },
-                                  (width / win_w),
-                                  (height / win_h),
-                                  1.0,
-                                  if flip_h { 1.0 } else { 0.0 },
-                                  -(width / win_w),
-                                  (height / win_h),
-                                  0.0,
-                                  if flip_h { 1.0 } else { 0.0 }];
-    let indices: Vec<u32> = vec![0, 1, 3, 1, 2, 3];
-
-    (vertices, indices)
-}
-
-#[inline]
-pub fn quad_at_pos(x: i32,
-                   y: i32,
-                   w: u32,
-                   h: u32,
-                   win_w: f32,
-                   win_h: f32,
-                   flip_h: bool)
-                   -> (Vec<f32>, Vec<u32>) {
-    let left = x as f32;
-    let right = (x + w as i32) as f32;
-    let top = win_h - y as f32;
-    let bottom = win_h - (y + h as i32) as f32;
-
-    let vertices: Vec<f32> = vec![(2.0 * left / win_w) - 1.0,
-                                  (2.0 * bottom / win_h) - 1.0,
-                                  0.0,
-                                  if flip_h { 1.0 } else { 0.0 },
-                                  (2.0 * right / win_w) - 1.0,
-                                  (2.0 * bottom / win_h) - 1.0,
-                                  1.0,
-                                  if flip_h { 1.0 } else { 0.0 },
-                                  (2.0 * right / win_w) - 1.0,
-                                  (2.0 * top / win_h) - 1.0,
-                                  1.0,
-                                  if flip_h { 0.0 } else { 1.0 },
-                                  (2.0 * left / win_w) - 1.0,
-                                  (2.0 * top / win_h) - 1.0,
-                                  0.0,
-                                  if flip_h { 0.0 } else { 1.0 }];
-    let indices: Vec<u32> = vec![0, 1, 3, 1, 2, 3];
-
-    (vertices, indices)
-}
-
-fn new_cstring_with_len(len: usize) -> CString {
-    // allocate sufficiently sized buffer
-    let mut buffer: Vec<u8> = Vec::with_capacity(len + 1);
-    // fill with spaces
-    buffer.extend([b' '].iter().cycle().take(len));
-    // convert to CString
-    unsafe { CString::from_vec_unchecked(buffer) }
 }
