@@ -12,7 +12,6 @@ use std::thread;
 use gl::types::{GLint, GLuint, GLvoid};
 use sdl2::render::{Texture, TextureCreator};
 use sdl2::surface::Surface;
-use sdl2::ttf::Font;
 
 mod buffer;
 mod quad;
@@ -98,18 +97,6 @@ pub fn scaled_texture_from_surface<'a, T: 'a>(creator: &'a TextureCreator<T>,
 
     creator.create_texture_from_surface(scaled_surface)
            .expect("Cannot convert image to texture")
-}
-
-#[inline]
-pub fn render_to_texture<'r, T: 'r>(creator: &'r TextureCreator<T>,
-                                    font: &Font,
-                                    message: &str)
-                                    -> Texture<'r> {
-    let text_surf = font.render(message)
-                        .blended((255, 255, 255, 255))
-                        .expect("Cannot render text to surface");
-    creator.create_texture_from_surface(text_surf)
-           .expect("Cannot convert surface to texture")
 }
 
 pub fn save_texture_to_png(tex: GLuint, filename: &Path) {
