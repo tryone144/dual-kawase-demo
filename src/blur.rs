@@ -6,7 +6,8 @@
 // that was distributed with this source code.
 //
 
-use gl::types::GLuint;
+use cpu_time::ProcessTime;
+use gl::types::{GLint, GLuint};
 use sdl2::render::Texture;
 
 use crate::renderer_gl::{FragmentShader, GLQuad, Program, Quad, TextureQuad, VertexShader,
@@ -20,6 +21,8 @@ pub struct BlurContext {
     copy_program: Program,
     down_program: Program,
     up_program: Program,
+    time_cpu: u128,
+    time_gpu: u64,
 }
 
 impl BlurContext {
@@ -67,7 +70,9 @@ impl BlurContext {
                swap_tex: (tex1, tex2),
                copy_program,
                down_program,
-               up_program }
+               up_program,
+               time_cpu: 0,
+               time_gpu: 0 }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -89,6 +94,14 @@ impl BlurContext {
 
     pub fn set_offset(&mut self, offset: f32) {
         self.offset = offset;
+    }
+
+    pub fn time_cpu(&self) -> f32 {
+        (self.time_cpu as f64 / 1000f64).round() as f32 / 1000.0
+    }
+
+    pub fn time_gpu(&self) -> f32 {
+        (self.time_gpu as f64 / 1000f64).round() as f32 / 1000.0
     }
 
     fn bind_fbo(&self, tgt_tex: GLuint) -> Result<(), GLuint> {
@@ -147,6 +160,15 @@ impl BlurContext {
         let mut quad = Quad::new(0, 0, src_width, src_height, vp.size(), true, true);
 
         vp.activate();
+
+        // Start timer
+        let mut gpu_time_query: GLuint = 0;
+        unsafe {
+            gl::GenQueries(1, &mut gpu_time_query);
+            gl::BeginQuery(gl::TIME_ELAPSED, gpu_time_query);
+        }
+
+        let cpu_time_start = ProcessTime::now();
 
         if self.iterations() == 0 {
             self.copy(&mut quad, source_tex, *target_quad.texture());
@@ -244,6 +266,24 @@ impl BlurContext {
             unsafe {
                 gl::BindTexture(gl::TEXTURE_2D, 0);
             }
+        }
+
+        // Stop timer
+        self.time_cpu = cpu_time_start.elapsed().as_nanos();
+
+        unsafe {
+            gl::EndQuery(gl::TIME_ELAPSED);
+        }
+
+        let mut result_avail: GLint = 0;
+        unsafe {
+            while result_avail == 0 {
+                gl::GetQueryObjectiv(gpu_time_query,
+                                     gl::QUERY_RESULT_AVAILABLE,
+                                     &mut result_avail);
+            }
+            gl::GetQueryObjectui64v(gpu_time_query, gl::QUERY_RESULT, &mut self.time_gpu);
+            gl::DeleteQueries(1, &gpu_time_query);
         }
     }
 }

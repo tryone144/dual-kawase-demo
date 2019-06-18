@@ -110,6 +110,10 @@ impl Quad {
         self.height
     }
 
+    pub fn pos(&self) -> (i32, i32) {
+        (self.x, self.y)
+    }
+
     fn refresh_buffers(&mut self) {
         self.vbo.bind();
         self.vbo.set_data(&self.vertices, gl::STATIC_DRAW);
@@ -126,7 +130,7 @@ impl Quad {
         // FIXME: vertices are not updated
     }
 
-    pub fn _update_pos(&mut self, x: i32, y: i32, vp_size: (u32, u32)) {
+    pub fn update_pos(&mut self, x: i32, y: i32, vp_size: (u32, u32)) {
         self.x = x;
         self.y = y;
         self.update_vp(vp_size);

@@ -19,6 +19,7 @@ mod blur;
 mod renderer_gl;
 mod utils;
 
+use blur::BlurContext;
 use renderer_gl::{FragmentShader, GLQuad, Program, SDLQuad, TextureQuad, VertexShader, Viewport};
 
 const WINDOW_TITLE: &str = "Dual-Filter Kawase Blur — Demo";
@@ -27,6 +28,8 @@ const WIN_HEIGHT: u32 = 720;
 
 const INFO_1: &str = "Down-/Upsample Iterations";
 const INFO_2: &str = "Blur Offset";
+const INFO_3: &str = "CPU Time";
+const INFO_4: &str = "GPU Time";
 
 fn run(image_file: &Path) {
     // Init SDL2 with subsystems
@@ -81,25 +84,41 @@ fn run(image_file: &Path) {
     background_img.fit_center(viewport.size());
 
     // Init blur context
-    let mut ctx = blur::BlurContext::new((background_img.width(), background_img.height()));
+    let mut ctx = BlurContext::new((background_img.width(), background_img.height()));
 
     // Init overlay text
     let mut overlay_iterations = {
-        let overlay_tex1 =
+        let overlay_tex =
             renderer_gl::render_to_texture(&texture_creator,
                                            &font,
                                            &format!("{}: {}", INFO_1, ctx.iterations()));
-        SDLQuad::from_texture(overlay_tex1, 20, 20, viewport.size())
+        SDLQuad::from_texture(overlay_tex, 20, 20, viewport.size())
     };
     let mut overlay_offset = {
-        let overlay_tex2 =
+        let overlay_tex =
             renderer_gl::render_to_texture(&texture_creator,
                                            &font,
                                            &format!("{}: {:.02}", INFO_2, ctx.offset()));
-        SDLQuad::from_texture(overlay_tex2,
+        SDLQuad::from_texture(overlay_tex,
                               20,
-                              20 + overlay_iterations.height() as i32,
+                              overlay_iterations.height() as i32 + 20,
                               viewport.size())
+    };
+    let mut overlay_gpu = {
+        let overlay_tex =
+            renderer_gl::render_to_texture(&texture_creator,
+                                           &font,
+                                           &format!("{}: {:6.03}ms", INFO_4, ctx.time_gpu()));
+        let tex_top = viewport.height() as i32 - overlay_tex.query().height as i32;
+        SDLQuad::from_texture(overlay_tex, 20, tex_top - 20, viewport.size())
+    };
+    let mut overlay_cpu = {
+        let overlay_tex =
+            renderer_gl::render_to_texture(&texture_creator,
+                                           &font,
+                                           &format!("{}: {:6.03}ms", INFO_3, ctx.time_cpu()));
+        let tex_top = overlay_gpu.pos().1 - overlay_tex.query().height as i32;
+        SDLQuad::from_texture(overlay_tex, 20, tex_top - 20, viewport.size())
     };
 
     // Init main shader and program
@@ -148,6 +167,11 @@ fn run(image_file: &Path) {
                     background_img.fit_center(viewport.size());
                     overlay_iterations.update_vp(viewport.size());
                     overlay_offset.update_vp(viewport.size());
+
+                    let gpu_top = viewport.height() as i32 - overlay_gpu.height() as i32;
+                    overlay_gpu.update_pos(20, gpu_top - 20, viewport.size());
+                    let cpu_top = overlay_gpu.pos().1 - overlay_cpu.height() as i32;
+                    overlay_cpu.update_pos(20, cpu_top, viewport.size());
 
                     // Redraw blur
                     redraw = true;
@@ -217,6 +241,13 @@ fn run(image_file: &Path) {
                         redraw = true;
                     }
                 },
+                Event::KeyDown { keycode: Some(Keycode::Return),
+                                 .. }
+                | Event::KeyDown { keycode: Some(Keycode::Space),
+                                 .. } => {
+                    // Force a redraw
+                    redraw = true;
+                },
                 _ => (),
             }
         }
@@ -237,6 +268,16 @@ fn run(image_file: &Path) {
                                                &font,
                                                &format!("{}: {:.02}", INFO_2, ctx.offset()));
             overlay_offset.update_texture(overlay_tex2, viewport.size());
+            let overlay_tex3 =
+                renderer_gl::render_to_texture(&texture_creator,
+                                               &font,
+                                               &format!("{}: {:6.03}ms", INFO_3, ctx.time_cpu()));
+            overlay_cpu.update_texture(overlay_tex3, viewport.size());
+            let overlay_tex4 =
+                renderer_gl::render_to_texture(&texture_creator,
+                                               &font,
+                                               &format!("{}: {:6.03}ms", INFO_4, ctx.time_gpu()));
+            overlay_gpu.update_texture(overlay_tex4, viewport.size());
         }
 
         // Draw window contents here
@@ -254,6 +295,8 @@ fn run(image_file: &Path) {
         // Draw overlay text
         overlay_iterations.draw(true);
         overlay_offset.draw(true);
+        overlay_gpu.draw(true);
+        overlay_cpu.draw(true);
 
         main_program.unbind();
 
