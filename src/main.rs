@@ -147,7 +147,9 @@ fn run(image_file: &Path) {
                                  .. } => {
                     let scale = 1 << (ctx.iterations() + 1);
                     let base = base_texture.query();
-                    if base.width / scale > 10 || base.height / scale > 10 {
+                    if (base.width / scale > 10 || base.height / scale > 10)
+                       && ctx.iterations() < blur::MAX_ITERATIONS as u32
+                    {
                         ctx.set_iterations(ctx.iterations() + 1);
                         redraw = true;
                     }

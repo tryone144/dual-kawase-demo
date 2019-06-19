@@ -290,16 +290,8 @@ impl DerefMut for GLQuad {
 
 impl TextureQuad<GLuint> for GLQuad {
     fn from_texture(tex: GLuint, x: i32, y: i32, vp_size: (u32, u32)) -> Self {
-        let mut width: GLint = 0;
-        let mut height: GLint = 0;
-        unsafe {
-            gl::BindTexture(gl::TEXTURE_2D, tex);
-            gl::GetTexParameteriv(gl::TEXTURE_2D, gl::TEXTURE_WIDTH, &mut width);
-            gl::GetTexParameteriv(gl::TEXTURE_2D, gl::TEXTURE_HEIGHT, &mut height);
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-        }
-
-        let quad = Quad::new(x, y, width as u32, height as u32, vp_size, false, true);
+        let (width, height) = super::get_texture_size(tex);
+        let quad = Quad::new(x, y, width, height, vp_size, false, true);
         Self { texture: tex, quad }
     }
 
@@ -309,15 +301,9 @@ impl TextureQuad<GLuint> for GLQuad {
 
     fn update_texture(&mut self, tex: GLuint, vp_size: (u32, u32)) {
         self.texture = tex;
-        let mut width: GLint = 0;
-        let mut height: GLint = 0;
-        unsafe {
-            gl::BindTexture(gl::TEXTURE_2D, self.texture);
-            gl::GetTexParameteriv(gl::TEXTURE_2D, gl::TEXTURE_WIDTH, &mut width);
-            gl::GetTexParameteriv(gl::TEXTURE_2D, gl::TEXTURE_HEIGHT, &mut height);
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-        }
-        self.quad.resize(width as u32, height as u32);
+        let (width, height) = super::get_texture_size(self.texture);
+
+        self.quad.resize(width, height);
         self.update_vp(vp_size);
     }
 

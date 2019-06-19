@@ -69,6 +69,19 @@ pub fn resize_texture(tex: GLuint, width: u32, height: u32) {
     }
 }
 
+pub fn get_texture_size(tex: GLuint) -> (u32, u32) {
+    let mut width: GLint = 0;
+    let mut height: GLint = 0;
+    unsafe {
+        gl::BindTexture(gl::TEXTURE_2D, tex);
+        gl::GetTexLevelParameteriv(gl::TEXTURE_2D, 0, gl::TEXTURE_WIDTH, &mut width);
+        gl::GetTexLevelParameteriv(gl::TEXTURE_2D, 0, gl::TEXTURE_HEIGHT, &mut height);
+        gl::BindTexture(gl::TEXTURE_2D, 0);
+    }
+
+    (width as u32, height as u32)
+}
+
 pub fn set_texture_params<'r>(tex: &mut Texture<'r>) {
     unsafe {
         tex.gl_bind_texture();
@@ -101,13 +114,7 @@ pub fn scaled_texture_from_surface<'a, T: 'a>(creator: &'a TextureCreator<T>,
 
 pub fn save_texture_to_png(tex: GLuint, filename: &Path) {
     // get texture size
-    let mut width: GLint = 0;
-    let mut height: GLint = 0;
-    unsafe {
-        gl::BindTexture(gl::TEXTURE_2D, tex);
-        gl::GetTexLevelParameteriv(gl::TEXTURE_2D, 0, gl::TEXTURE_WIDTH, &mut width);
-        gl::GetTexLevelParameteriv(gl::TEXTURE_2D, 0, gl::TEXTURE_HEIGHT, &mut height);
-    }
+    let (width, height) = get_texture_size(tex);
 
     // get texture pixels
     let size: usize = width as usize * height as usize * 4;

@@ -13,11 +13,88 @@ use sdl2::render::Texture;
 use crate::renderer_gl::{FragmentShader, GLQuad, Program, Quad, TextureQuad, VertexShader,
                          Viewport};
 
+pub const MAX_ITERATIONS: usize = 8;
+
+pub struct Framebuffer {
+    fbo: GLuint,
+    tex: GLuint,
+    size: (u32, u32),
+}
+
+impl Framebuffer {
+    pub fn from_fbo(fbo: GLuint) -> Self {
+        Self { fbo,
+               tex: 0,
+               size: (0, 0) }
+    }
+
+    pub fn attach_texture(&mut self, tex: GLuint) -> Result<(), GLuint> {
+        self.tex = tex;
+
+        unsafe {
+            gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.fbo);
+            gl::FramebufferTexture2D(gl::DRAW_FRAMEBUFFER,
+                                     gl::COLOR_ATTACHMENT0,
+                                     gl::TEXTURE_2D,
+                                     self.tex,
+                                     0);
+        }
+
+        // check attachment status
+        let status = unsafe { gl::CheckFramebufferStatus(gl::DRAW_FRAMEBUFFER) };
+        unsafe {
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+        }
+
+        self.size = crate::renderer_gl::get_texture_size(self.tex);
+
+        if status != gl::FRAMEBUFFER_COMPLETE {
+            return Err(status);
+        }
+
+        Ok(())
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        crate::renderer_gl::resize_texture(self.tex, width, height);
+        self.size = (width, height);
+    }
+
+    pub fn size(&self) -> (u32, u32) {
+        self.size
+    }
+
+    pub fn bind_fbo(&self) {
+        unsafe {
+            gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.fbo);
+            gl::DrawBuffer(gl::COLOR_ATTACHMENT0);
+        }
+    }
+
+    pub fn unbind_fbo(&self) {
+        unsafe {
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+            gl::DrawBuffer(gl::BACK);
+        }
+    }
+
+    pub fn bind_tex(&self) {
+        unsafe {
+            gl::BindTexture(gl::TEXTURE_2D, self.tex);
+        }
+    }
+
+    pub fn unbind_tex(&self) {
+        unsafe {
+            gl::BindTexture(gl::TEXTURE_2D, 0);
+        }
+    }
+}
+
 pub struct BlurContext {
     iterations: u32,
     offset: f32,
-    fbo: GLuint,
-    swap_tex: (GLuint, GLuint),
+    framebuffers: Vec<Framebuffer>,
     copy_program: Program,
     down_program: Program,
     up_program: Program,
@@ -27,15 +104,26 @@ pub struct BlurContext {
 
 impl BlurContext {
     pub fn new(vp_size: (u32, u32)) -> Self {
-        // init framebuffer for background rendering
-        let mut fbo: GLuint = 0;
+        // init framebuffers for background rendering
+        let mut fbos: Vec<GLuint> = Vec::with_capacity(MAX_ITERATIONS + 1);
         unsafe {
-            gl::GenFramebuffers(1, &mut fbo);
+            gl::GenFramebuffers(MAX_ITERATIONS as i32 + 1, fbos.as_mut_ptr() as *mut GLuint);
+            fbos.set_len(MAX_ITERATIONS + 1);
         }
 
-        // init temporary swap textures
-        let tex1 = crate::renderer_gl::create_texture(vp_size.0, vp_size.1);
-        let tex2 = crate::renderer_gl::create_texture(vp_size.0, vp_size.1);
+        let mut framebuffers = Vec::with_capacity(MAX_ITERATIONS);
+        framebuffers.push(Framebuffer::from_fbo(fbos[0]));
+
+        // init framebuffers with target textures
+        for (i, fbo) in fbos.iter().enumerate().skip(1) {
+            let mut fb = Framebuffer::from_fbo(*fbo);
+            let tex =
+                crate::renderer_gl::create_texture(vp_size.0 / (1 << i), vp_size.1 / (1 << i));
+
+            fb.attach_texture(tex)
+              .expect("Failed to attach texture to framebuffer");
+            framebuffers.push(fb);
+        }
 
         // init shader and program
         let vert_shader = VertexShader::from_source(include_str!("shaders/tex_quad.vert"))
@@ -66,8 +154,7 @@ impl BlurContext {
 
         Self { iterations: 0,
                offset: 0.0,
-               fbo,
-               swap_tex: (tex1, tex2),
+               framebuffers,
                copy_program,
                down_program,
                up_program,
@@ -76,8 +163,10 @@ impl BlurContext {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        crate::renderer_gl::resize_texture(self.swap_tex.0, width, height);
-        crate::renderer_gl::resize_texture(self.swap_tex.1, width, height);
+        // resize target textures
+        for (i, fb) in self.framebuffers.iter_mut().enumerate().skip(1) {
+            fb.resize(width / (1 << i), height / (1 << i));
+        }
     }
 
     pub fn iterations(&self) -> u32 {
@@ -104,39 +193,11 @@ impl BlurContext {
         (self.time_gpu as f64 / 1000f64).round() as f32 / 1000.0
     }
 
-    fn bind_fbo(&self, tgt_tex: GLuint) -> Result<(), GLuint> {
-        unsafe {
-            gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.fbo);
-            gl::FramebufferTexture2D(gl::DRAW_FRAMEBUFFER,
-                                     gl::COLOR_ATTACHMENT0,
-                                     gl::TEXTURE_2D,
-                                     tgt_tex,
-                                     0);
-            gl::DrawBuffer(gl::COLOR_ATTACHMENT0);
-        }
-
-        // check attachment status
-        let status = unsafe { gl::CheckFramebufferStatus(gl::DRAW_FRAMEBUFFER) };
-        if status != gl::FRAMEBUFFER_COMPLETE {
-            return Err(status);
-        }
-
-        Ok(())
-    }
-
-    fn unbind_fbo(&self) {
-        unsafe {
-            gl::BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
-            gl::DrawBuffer(gl::BACK);
-        }
-    }
-
-    fn swap_textures(&mut self) {
-        self.swap_tex = (self.swap_tex.1, self.swap_tex.0);
-    }
-
     fn copy(&mut self, rect: &mut Quad, src: &mut Texture, tgt: GLuint) {
-        self.bind_fbo(tgt).expect("Failed to activate framebuffer");
+        let fb = &mut self.framebuffers[0];
+        fb.attach_texture(tgt)
+          .expect("Failed to attach target texture to framebuffer");
+        fb.bind_fbo();
         self.copy_program.activate();
 
         unsafe {
@@ -149,7 +210,7 @@ impl BlurContext {
         }
 
         self.copy_program.unbind();
-        self.unbind_fbo();
+        fb.unbind_fbo();
     }
 
     pub fn blur(&mut self, source_tex: &mut Texture, target_quad: &GLQuad) {
@@ -173,49 +234,50 @@ impl BlurContext {
         if self.iterations() == 0 {
             self.copy(&mut quad, source_tex, *target_quad.texture());
         } else {
-            let tgt_width = src_width as f32;
-            let tgt_height = src_height as f32;
+            // Attach target texture to framebuffer
+            self.framebuffers[0].attach_texture(*target_quad.texture())
+                                .expect("Failed to attach target texture to framebuffer");
 
             // Downsample
             self.down_program.activate();
             self.down_program
                 .set_uniform_1f("offset", self.offset() as f32)
                 .expect("Cannot set downsample uniform");
-            self.down_program
-                .set_uniform_2f("halfpixel", (0.5 / tgt_width, 0.5 / tgt_height))
-                .expect("Cannot set downsample uniform");
 
-            for iteration in 0..self.iterations() {
+            for iteration in 0..MAX_ITERATIONS.min(self.iterations() as usize) {
+                let (tgt_width, tgt_height) = self.framebuffers[iteration + 1].size();
+
                 self.down_program
                     .set_uniform_1i("iteration", iteration as i32)
-                    //.set_uniform_1i("iteration", 1)
+                    .expect("Cannot set downsample uniform");
+                self.down_program
+                    .set_uniform_2f("halfpixel",
+                                    (0.5 / tgt_width as f32, 0.5 / tgt_height as f32))
                     .expect("Cannot set downsample uniform");
 
-                self.bind_fbo(self.swap_tex.1)
-                    .expect("Failed to activate framebuffer");
+                self.framebuffers[iteration + 1].bind_fbo();
 
+                if iteration == 0 {
+                    // first iteration: copy from source
+                    unsafe {
+                        source_tex.gl_bind_texture();
+                    }
+                } else {
+                    // copy from last iteration
+                    self.framebuffers[iteration].bind_tex();
+                }
                 unsafe {
                     gl::Clear(gl::COLOR_BUFFER_BIT);
-                    if iteration == 0 {
-                        // first iteration: copy from source
-                        source_tex.gl_bind_texture();
-                    } else {
-                        // copy from last iteration
-                        gl::BindTexture(gl::TEXTURE_2D, self.swap_tex.0);
-                    }
                 }
 
                 // draw texture to fbo
                 quad.draw(false);
-                unsafe {
-                    if iteration == 0 {
-                        // first iteration: unbind source
+                if iteration == 0 {
+                    // first iteration: unbind source
+                    unsafe {
                         source_tex.gl_unbind_texture();
                     }
                 }
-
-                // swap source and target textures
-                self.swap_textures();
             }
 
             self.down_program.unbind();
@@ -226,46 +288,36 @@ impl BlurContext {
                 .set_uniform_1f("offset", self.offset() as f32)
                 .expect("Cannot set upsample uniform");
             self.up_program
-                .set_uniform_2f("halfpixel", (0.5 / tgt_width, 0.5 / tgt_height))
-                .expect("Cannot set upsample uniform");
-            self.up_program
                 .set_uniform_1f("opacity", 1.0)
                 .expect("Cannot set upsample uniform");
 
-            for iteration in (0..self.iterations()).rev() {
+            for iteration in (0..MAX_ITERATIONS.min(self.iterations() as usize)).rev() {
+                let (tgt_width, tgt_height) = self.framebuffers[iteration].size();
+
                 self.up_program
                     .set_uniform_1i("iteration", iteration as i32)
+                    .expect("Cannot set upsample uniform");
+                self.up_program
+                    .set_uniform_2f("halfpixel",
+                                    (0.5 / tgt_width as f32, 0.5 / tgt_height as f32))
                     .expect("Cannot set upsample uniform");
                 // self.up_program
                 //    .set_uniform_1f("opacity", 1.0)
                 //    .expect("Cannot set upsample uniform");
 
-                if iteration == 0 {
-                    // last iteration: write to target
-                    self.bind_fbo(*target_quad.texture())
-                        .expect("Failed to activate framebuffer");
-                } else {
-                    // write to next iteration
-                    self.bind_fbo(self.swap_tex.1)
-                        .expect("Failed to activate framebuffer");
-                }
+                self.framebuffers[iteration].bind_fbo();
 
                 // draw texture to fbo
                 unsafe {
                     gl::Clear(gl::COLOR_BUFFER_BIT);
-                    gl::BindTexture(gl::TEXTURE_2D, self.swap_tex.0);
                 }
+                self.framebuffers[iteration + 1].bind_tex();
                 quad.draw(false);
-
-                // swap source and target textures
-                self.swap_textures();
             }
 
-            self.unbind_fbo();
+            self.framebuffers[0].unbind_fbo();
+            self.framebuffers[0].unbind_tex();
             self.up_program.unbind();
-            unsafe {
-                gl::BindTexture(gl::TEXTURE_2D, 0);
-            }
         }
 
         // Stop timer
