@@ -13,6 +13,7 @@ use sdl2::gfx::framerate::FPSManager;
 use sdl2::image::{InitFlag, LoadSurface};
 use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::surface::Surface;
+use sdl2::video::FullscreenType;
 
 mod blur;
 mod overlay;
@@ -54,9 +55,9 @@ fn run(image_file: &Path) {
     gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
 
     // Load main window canvas
-    let canvas = window.into_canvas()
-                       .build()
-                       .expect("Cannot get window canvas");
+    let mut canvas = window.into_canvas()
+                           .build()
+                           .expect("Cannot get window canvas");
     let texture_creator = canvas.texture_creator();
 
     // Load image as texture
@@ -135,6 +136,25 @@ fn run(image_file: &Path) {
                 | Event::KeyDown { keycode: Some(Keycode::Q),
                                  .. } => {
                     break 'mainloop;
+                },
+                Event::KeyDown { scancode: Some(Scancode::F),
+                                 .. } => {
+                    match canvas.window().fullscreen_state() {
+                        FullscreenType::Off => {
+                            canvas.window_mut()
+                                  .set_fullscreen(FullscreenType::Desktop)
+                                  .unwrap_or_else(|err| {
+                                      eprintln!("Cannot enter fullscreen mode: {}", err)
+                                  });
+                        },
+                        FullscreenType::True | FullscreenType::Desktop => {
+                            canvas.window_mut()
+                                  .set_fullscreen(FullscreenType::Off)
+                                  .unwrap_or_else(|err| {
+                                      eprintln!("Cannot leave fullscreen mode: {}", err)
+                                  });
+                        },
+                    };
                 },
                 Event::KeyDown { keycode: Some(Keycode::Left),
                                  .. } => {
