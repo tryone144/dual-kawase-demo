@@ -12,7 +12,7 @@ use std::thread;
 
 use sdl2::event::{Event, WindowEvent};
 use sdl2::gfx::framerate::FPSManager;
-use sdl2::keyboard::{Keycode, Scancode};
+use sdl2::keyboard::{Keycode, Mod, Scancode};
 use sdl2::video::FullscreenType;
 
 mod blur;
@@ -154,10 +154,15 @@ fn run(image_file: &Path) {
                 Event::KeyDown { keycode: Some(Keycode::Escape),
                                  .. }
                 | Event::KeyDown { keycode: Some(Keycode::Q),
+                                 keymod: Mod::NOMOD,
                                  .. } => {
                     break 'mainloop;
                 },
                 Event::KeyDown { scancode: Some(Scancode::F),
+                                 keymod: Mod::NOMOD,
+                                 .. }
+                | Event::KeyDown { keycode: Some(Keycode::F11),
+                                 keymod: Mod::NOMOD,
                                  .. } => {
                     match window.fullscreen_state() {
                         FullscreenType::Off => {
@@ -201,6 +206,22 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Up),
+                                 keymod,
+                                 .. } if (keymod & Mod::RSHIFTMOD) | (keymod & Mod::LSHIFTMOD) != Mod::NOMOD =>
+                {
+                    sync_redraw!(
+                                 redraw_ref | {
+                        if blur_ctx.offset() <= 24.0 {
+                            blur_ctx.inc_offset(1.0);
+                            *redraw_ref = true;
+                        } else {
+                            blur_ctx.set_offset(25.0);
+                            *redraw_ref = true;
+                        }
+                    }
+                    );
+                }
+                Event::KeyDown { keycode: Some(Keycode::Up),
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -215,6 +236,21 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Down),
+                                 keymod,
+                                 .. } if (keymod & Mod::RSHIFTMOD) | (keymod & Mod::LSHIFTMOD) != Mod::NOMOD =>
+                {
+                    sync_redraw!(
+                                 redraw_ref | {
+                        if blur_ctx.offset() >= 1.0 {
+                            blur_ctx.inc_offset(-1.0);
+                        } else {
+                            blur_ctx.set_offset(0.0);
+                        }
+                        *redraw_ref = true;
+                    }
+                    );
+                }
+                Event::KeyDown { keycode: Some(Keycode::Down),
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -228,7 +264,10 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { scancode: Some(Scancode::S),
-                                 .. } => {
+                                 keymod,
+                                 repeat: false,
+                                 .. } if (keymod & Mod::RCTRLMOD) | (keymod & Mod::LCTRLMOD) != Mod::NOMOD =>
+                {
                     let mut count = 0;
                     let mut fname;
                     loop {
@@ -244,6 +283,8 @@ fn run(image_file: &Path) {
                     renderer_gl::save_texture_to_png(*background_img.texture(), path);
                 }
                 Event::KeyDown { keycode: Some(Keycode::Num1),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -254,6 +295,8 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num2),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -264,6 +307,8 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num3),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -274,6 +319,8 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num4),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -284,6 +331,8 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num5),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -294,6 +343,8 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num6),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -304,6 +355,8 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num7),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -314,6 +367,8 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num8),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -324,6 +379,8 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num9),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -334,8 +391,12 @@ fn run(image_file: &Path) {
                     );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num0),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. }
                 | Event::KeyDown { scancode: Some(Scancode::R),
+                                 keymod: Mod::NOMOD,
+                                 repeat: false,
                                  .. } => {
                     sync_redraw!(
                                  redraw_ref | {
@@ -347,6 +408,14 @@ fn run(image_file: &Path) {
                     }
                     );
                 },
+                Event::KeyDown { scancode: Some(Scancode::R),
+                                 keymod,
+                                 repeat: false,
+                                 .. } if (keymod & Mod::RCTRLMOD) | (keymod & Mod::LCTRLMOD) != Mod::NOMOD =>
+                {
+                    // Force a redraw
+                    *redraw.lock().unwrap() = true;
+                }
                 Event::KeyDown { keycode: Some(Keycode::Return),
                                  .. }
                 | Event::KeyDown { keycode: Some(Keycode::Space),
