@@ -42,10 +42,12 @@ impl Program {
         if success == 0 {
             // `gl::LinkProgram` failed
             let mut len: GLint = 0;
-            let error = crate::utils::new_cstring_with_len(len as usize);
-
             unsafe {
                 gl::GetProgramiv(program_id, gl::INFO_LOG_LENGTH, &mut len);
+            }
+
+            let error = crate::utils::new_cstring_with_len(len as usize);
+            unsafe {
                 gl::GetProgramInfoLog(program_id,
                                       len,
                                       std::ptr::null_mut(),
