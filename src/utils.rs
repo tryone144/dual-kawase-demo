@@ -44,7 +44,7 @@ pub fn centered_quad_keep_aspect(width: f32,
                                   -(width / win_w),
                                   (height / win_h),
                                   0.0,
-                                  if flip_h { 1.0 } else { 0.0 }];
+                                  if flip_h { 1.0 } else { 0.0 },];
     let indices: Vec<u32> = vec![0, 1, 3, 1, 2, 3];
 
     (vertices, indices)
@@ -79,7 +79,7 @@ pub fn quad_at_pos(x: i32,
                                   (2.0 * left / win_w) - 1.0,
                                   (2.0 * top / win_h) - 1.0,
                                   0.0,
-                                  if flip_h { 0.0 } else { 1.0 }];
+                                  if flip_h { 0.0 } else { 1.0 },];
     let indices: Vec<u32> = vec![0, 1, 3, 1, 2, 3];
 
     (vertices, indices)

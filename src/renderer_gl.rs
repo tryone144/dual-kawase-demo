@@ -16,39 +16,32 @@ use sdl2::surface::Surface;
 mod buffer;
 mod quad;
 mod shader;
+mod surface;
 mod viewport;
 
 pub use self::buffer::{ArrayBuffer, ElementArrayBuffer, VertexArray};
 pub use self::quad::{GLQuad, Quad, SDLQuad, TextureQuad};
 pub use self::shader::{FragmentShader, GlShader, Program, VertexShader};
+pub use self::surface::ImgSurface;
 pub use self::viewport::Viewport;
 
-pub fn create_texture(width: u32, height: u32) -> GLuint {
+pub fn create_texture(width: u32, height: u32, data: Option<Vec<u8>>) -> GLuint {
     let mut texture: GLuint = 0;
     unsafe {
         gl::GenTextures(1, &mut texture);
-        gl::BindTexture(gl::TEXTURE_2D, texture);
-        gl::TexImage2D(gl::TEXTURE_2D,
-                       0,
-                       gl::RGBA8 as i32,
-                       width as i32,
-                       height as i32,
-                       0,
-                       gl::BGRA,
-                       gl::UNSIGNED_BYTE,
-                       std::ptr::null());
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAX_LEVEL, 0);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
-        gl::BindTexture(gl::TEXTURE_2D, 0);
     }
+
+    resize_texture(texture, width, height, data);
 
     texture
 }
 
-pub fn resize_texture(tex: GLuint, width: u32, height: u32) {
+pub fn resize_texture(tex: GLuint, width: u32, height: u32, data: Option<Vec<u8>>) {
+    let raw_data = match data {
+        Some(vec) => vec.as_ptr() as *const GLvoid,
+        None => std::ptr::null(),
+    };
+
     unsafe {
         gl::BindTexture(gl::TEXTURE_2D, tex);
         gl::TexImage2D(gl::TEXTURE_2D,
@@ -59,7 +52,7 @@ pub fn resize_texture(tex: GLuint, width: u32, height: u32) {
                        0,
                        gl::BGRA,
                        gl::UNSIGNED_BYTE,
-                       std::ptr::null());
+                       raw_data);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAX_LEVEL, 0);

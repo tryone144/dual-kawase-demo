@@ -102,6 +102,10 @@ impl Quad {
                vao }
     }
 
+    pub fn size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
     pub fn width(&self) -> u32 {
         self.width
     }
@@ -262,14 +266,14 @@ pub struct GLQuad {
 
 impl GLQuad {
     pub fn new_with_texture(x: i32, y: i32, width: u32, height: u32, vp_size: (u32, u32)) -> Self {
-        let texture = super::create_texture(width, height);
+        let texture = super::create_texture(width, height, None);
         let quad = Quad::new(x, y, width as u32, height as u32, vp_size, false, false);
 
         Self { texture, quad }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        super::resize_texture(self.texture, width, height);
+        super::resize_texture(self.texture, width, height, None);
         self.quad.resize(width, height);
     }
 }

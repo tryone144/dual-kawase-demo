@@ -7,12 +7,12 @@
 //
 
 use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use sdl2::event::{Event, WindowEvent};
 use sdl2::gfx::framerate::FPSManager;
-use sdl2::image::{InitFlag, LoadSurface};
 use sdl2::keyboard::{Keycode, Scancode};
-use sdl2::surface::Surface;
 use sdl2::video::FullscreenType;
 
 mod blur;
@@ -21,19 +21,22 @@ mod renderer_gl;
 mod utils;
 
 use blur::BlurContext;
-use overlay::InfoOverlay;
-use renderer_gl::{FragmentShader, GLQuad, Program, TextureQuad, VertexShader, Viewport};
+// use overlay::InfoOverlay;
+use renderer_gl::{FragmentShader, GLQuad, ImgSurface, Program, TextureQuad, VertexShader, Viewport};
 
 const WINDOW_TITLE: &str = "Dual-Filter Kawase Blur — Demo";
 const WIN_WIDTH: u32 = 1280;
 const WIN_HEIGHT: u32 = 720;
 
 fn run(image_file: &Path) {
+    println!("Load base image '{}' ...", image_file.display());
+    let base_image = image::open(image_file).expect("Cannot load base image");
+    println!("Done");
+
     // Init SDL2 with subsystems
     let sdl = sdl2::init().expect("Cannot initialize SDL2");
     let video_subsystem = sdl.video().expect("Cannot initialize video subsystem");
-    let _image_ctx = sdl2::image::init(InitFlag::PNG | InitFlag::JPG);
-    let ttf = sdl2::ttf::init().expect("Cannot initialize ttf subsystem");
+    // let ttf = sdl2::ttf::init().expect("Cannot initialize ttf subsystem");
 
     let mut fps_manager = FPSManager::new();
     fps_manager.set_framerate(60)
@@ -42,44 +45,42 @@ fn run(image_file: &Path) {
     let gl_attr = video_subsystem.gl_attr();
     gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
     gl_attr.set_context_version(3, 3);
+    gl_attr.set_double_buffer(true);
+    gl_attr.set_context_flags().forward_compatible().set();
 
     // Create window
-    let window = video_subsystem.window(WINDOW_TITLE, WIN_WIDTH, WIN_HEIGHT)
-                                .resizable()
-                                .opengl()
-                                .build()
-                                .expect("Cannot create OpenGL window");
+    let mut window = video_subsystem.window(WINDOW_TITLE, WIN_WIDTH, WIN_HEIGHT)
+                                    .resizable()
+                                    .opengl()
+                                    .build()
+                                    .expect("Cannot create OpenGL window");
     let mut viewport = Viewport::from_window(WIN_WIDTH, WIN_HEIGHT);
 
     let _gl_context = window.gl_create_context().expect("Cannot load GL context");
     gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
-
-    // Load main window canvas
-    let mut canvas = window.into_canvas()
-                           .build()
-                           .expect("Cannot get window canvas");
-    let texture_creator = canvas.texture_creator();
+    println!("GL version/profile: {}.{} / {:?}",
+             gl_attr.context_version().0,
+             gl_attr.context_version().1,
+             gl_attr.context_profile());
 
     // Load image as texture
-    let image_surface = Surface::from_file(image_file).expect("Cannot load base image");
-    let mut base_texture = renderer_gl::scaled_texture_from_surface(&texture_creator,
-                                                                    &image_surface,
-                                                                    WIN_WIDTH,
-                                                                    WIN_HEIGHT);
+    let base_surface =
+        Arc::new(Mutex::new(ImgSurface::new_from_image(&base_image, WIN_WIDTH, WIN_HEIGHT)));
 
     // Init full-screen image display
-    let mut background_img = GLQuad::new_with_texture(0,
-                                                      0,
-                                                      base_texture.query().width,
-                                                      base_texture.query().height,
-                                                      viewport.size());
-    background_img.fit_center(viewport.size());
+    let mut background_img = {
+        let base = base_surface.lock().unwrap();
+        let mut quad = GLQuad::new_with_texture(0, 0, base.width(), base.height(), viewport.size());
+        quad.fit_center(viewport.size());
+
+        quad
+    };
 
     // Init blur context
-    let mut ctx = BlurContext::new((background_img.width(), background_img.height()));
+    let mut blur_ctx = BlurContext::new(background_img.size());
 
     // Init overlay text
-    let mut overlay = InfoOverlay::new(&ttf, &texture_creator, &ctx, viewport.size());
+    // let mut overlay = InfoOverlay::new(&ttf, &texture_creator, &ctx, viewport.size());
 
     // Init main shader and program
     let vert_shader = VertexShader::from_source(include_str!("shaders/tex_quad.vert"))
@@ -98,9 +99,29 @@ fn run(image_file: &Path) {
 
     viewport.activate();
 
+    // redraw mutex lock
+    let redraw = Arc::new(Mutex::new(false));
+    macro_rules! sync_redraw {
+        ($ref:ident | $synced:block) => {{
+            let mut $ref = redraw.lock().unwrap();
+            $synced
+        }};
+        ($synced:block) => {
+            sync_redraw!(_redraw_lock | $synced)
+        };
+    }
+    macro_rules! try_sync_redraw {
+        ($ref:ident | $synced:block) => {{
+            let mut redraw_lock = redraw.try_lock();
+            if let Ok(ref mut $ref) = redraw_lock {
+                $synced
+            }
+        }};
+    }
+
     // Main loop
+    println!("Init done. Start main loop ...");
     let mut ev_pump = sdl.event_pump().unwrap();
-    let mut redraw = false;
     'mainloop: loop {
         // Handle all queued events
         for event in ev_pump.poll_iter() {
@@ -112,24 +133,23 @@ fn run(image_file: &Path) {
                     viewport.update_size(w as u32, h as u32);
                     viewport.activate();
 
-                    // Update image texture
-                    base_texture = renderer_gl::scaled_texture_from_surface(&texture_creator,
-                                                                            &image_surface,
-                                                                            viewport.size().0,
-                                                                            viewport.size().1);
-                    renderer_gl::set_texture_params(&mut base_texture);
+                    // Resize base image
+                    let (new_w, new_h) = viewport.size();
+                    let surf_ref = base_surface.clone();
+                    let redraw_ref = redraw.clone();
 
-                    // Update vertex positions
-                    let base_w = base_texture.query().width;
-                    let base_h = base_texture.query().height;
-                    background_img.resize(base_w, base_h);
-                    background_img.fit_center(viewport.size());
+                    thread::spawn(move || {
+                        // Block further redraw events
+                        let mut update_lock = redraw_ref.lock().unwrap();
 
-                    ctx.resize(base_w, base_h);
-                    overlay.resize(viewport.size());
+                        // XXX Just rescale image and emit redraw event. Texture update is done in
+                        //     main thread
+                        let mut surf = surf_ref.lock().unwrap();
+                        surf.resize_image(new_w, new_h);
 
-                    // Redraw blur
-                    redraw = true;
+                        // Sent redraw blur event
+                        *update_lock = true;
+                    });
                 },
                 Event::KeyDown { keycode: Some(Keycode::Escape),
                                  .. }
@@ -139,17 +159,15 @@ fn run(image_file: &Path) {
                 },
                 Event::KeyDown { scancode: Some(Scancode::F),
                                  .. } => {
-                    match canvas.window().fullscreen_state() {
+                    match window.fullscreen_state() {
                         FullscreenType::Off => {
-                            canvas.window_mut()
-                                  .set_fullscreen(FullscreenType::Desktop)
+                            window.set_fullscreen(FullscreenType::Desktop)
                                   .unwrap_or_else(|err| {
                                       eprintln!("Cannot enter fullscreen mode: {}", err)
                                   });
                         },
                         FullscreenType::True | FullscreenType::Desktop => {
-                            canvas.window_mut()
-                                  .set_fullscreen(FullscreenType::Off)
+                            window.set_fullscreen(FullscreenType::Off)
                                   .unwrap_or_else(|err| {
                                       eprintln!("Cannot leave fullscreen mode: {}", err)
                                   });
@@ -158,40 +176,56 @@ fn run(image_file: &Path) {
                 },
                 Event::KeyDown { keycode: Some(Keycode::Left),
                                  .. } => {
-                    if ctx.iterations() > 0 {
-                        ctx.set_iterations(ctx.iterations() - 1);
-                        redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        if blur_ctx.iterations() > 0 {
+                            blur_ctx.inc_iterations(-1);
+                            *redraw_ref = true;
+                        }
                     }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Right),
                                  .. } => {
-                    let scale = 1 << (ctx.iterations() + 1);
-                    let base = base_texture.query();
-                    if (base.width / scale > 10 || base.height / scale > 10)
-                       && ctx.iterations() < blur::MAX_ITERATIONS as u32
-                    {
-                        ctx.set_iterations(ctx.iterations() + 1);
-                        redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        let scale = 1 << (blur_ctx.iterations() + 1);
+                        let surf = base_surface.lock().unwrap();
+                        if (surf.width() / scale > 10 || surf.height() / scale > 10)
+                           && blur_ctx.iterations() < blur::MAX_ITERATIONS as u32
+                        {
+                            blur_ctx.inc_iterations(1);
+                            *redraw_ref = true;
+                        }
                     }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Up),
                                  .. } => {
-                    if ctx.offset() < 25.0 {
-                        ctx.set_offset(ctx.offset() + 0.25);
-                        redraw = true;
-                    } else {
-                        ctx.set_offset(25.0);
-                        redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        if blur_ctx.offset() <= 24.75 {
+                            blur_ctx.inc_offset(0.25);
+                            *redraw_ref = true;
+                        } else {
+                            blur_ctx.set_offset(25.0);
+                            *redraw_ref = true;
+                        }
                     }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Down),
                                  .. } => {
-                    if ctx.offset() > 0.0 {
-                        ctx.set_offset(ctx.offset() - 0.25);
-                    } else {
-                        ctx.set_offset(0.0);
+                    sync_redraw!(
+                                 redraw_ref | {
+                        if blur_ctx.offset() >= 0.25 {
+                            blur_ctx.inc_offset(-0.25);
+                        } else {
+                            blur_ctx.set_offset(0.0);
+                        }
+                        *redraw_ref = true;
                     }
-                    redraw = true;
+                    );
                 },
                 Event::KeyDown { scancode: Some(Scancode::S),
                                  .. } => {
@@ -206,92 +240,155 @@ fn run(image_file: &Path) {
                     }
                     let path = Path::new(&fname);
 
-                    println!("Save image to {:?}", path);
+                    println!("Save image to '{}' ...", path.display());
                     renderer_gl::save_texture_to_png(*background_img.texture(), path);
-                },
+                }
                 Event::KeyDown { keycode: Some(Keycode::Num1),
                                  .. } => {
-                    ctx.set_iterations(1);
-                    ctx.set_offset(1.5);
-                    redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        blur_ctx.set_iterations(1);
+                        blur_ctx.set_offset(1.5);
+                        *redraw_ref = true;
+                    }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num2),
                                  .. } => {
-                    ctx.set_iterations(1);
-                    ctx.set_offset(2.0);
-                    redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        blur_ctx.set_iterations(1);
+                        blur_ctx.set_offset(2.0);
+                        *redraw_ref = true;
+                    }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num3),
                                  .. } => {
-                    ctx.set_iterations(2);
-                    ctx.set_offset(2.5);
-                    redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        blur_ctx.set_iterations(2);
+                        blur_ctx.set_offset(2.5);
+                        *redraw_ref = true;
+                    }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num4),
                                  .. } => {
-                    ctx.set_iterations(2);
-                    ctx.set_offset(3.0);
-                    redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        blur_ctx.set_iterations(2);
+                        blur_ctx.set_offset(3.0);
+                        *redraw_ref = true;
+                    }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num5),
                                  .. } => {
-                    ctx.set_iterations(3);
-                    ctx.set_offset(2.75);
-                    redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        blur_ctx.set_iterations(3);
+                        blur_ctx.set_offset(2.75);
+                        *redraw_ref = true;
+                    }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num6),
                                  .. } => {
-                    ctx.set_iterations(3);
-                    ctx.set_offset(3.5);
-                    redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        blur_ctx.set_iterations(3);
+                        blur_ctx.set_offset(3.5);
+                        *redraw_ref = true;
+                    }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num7),
                                  .. } => {
-                    ctx.set_iterations(3);
-                    ctx.set_offset(4.25);
-                    redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        blur_ctx.set_iterations(3);
+                        blur_ctx.set_offset(4.25);
+                        *redraw_ref = true;
+                    }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num8),
                                  .. } => {
-                    ctx.set_iterations(3);
-                    ctx.set_offset(5.0);
-                    redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        blur_ctx.set_iterations(3);
+                        blur_ctx.set_offset(5.0);
+                        *redraw_ref = true;
+                    }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num9),
                                  .. } => {
-                    ctx.set_iterations(4);
-                    ctx.set_offset(3.75);
-                    redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        blur_ctx.set_iterations(4);
+                        blur_ctx.set_offset(3.75);
+                        *redraw_ref = true;
+                    }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Num0),
                                  .. }
                 | Event::KeyDown { scancode: Some(Scancode::R),
                                  .. } => {
-                    if ctx.offset() > 0.0 || ctx.iterations() != 0 {
-                        ctx.set_offset(0.0);
-                        ctx.set_iterations(0);
-                        redraw = true;
+                    sync_redraw!(
+                                 redraw_ref | {
+                        if blur_ctx.offset() > 0.0 || blur_ctx.iterations() != 0 {
+                            blur_ctx.set_offset(0.0);
+                            blur_ctx.set_iterations(0);
+                            *redraw_ref = true;
+                        }
                     }
+                    );
                 },
                 Event::KeyDown { keycode: Some(Keycode::Return),
                                  .. }
                 | Event::KeyDown { keycode: Some(Keycode::Space),
                                  .. } => {
                     // Force a redraw
-                    redraw = true;
+                    *redraw.lock().unwrap() = true;
                 },
                 _ => (),
             }
         }
 
-        if redraw {
-            redraw = false;
-            // Redraw blur texture
-            ctx.blur(&mut base_texture, &background_img);
+        // check for redraw events
+        try_sync_redraw!(
+                         redraw_ref | {
+            if **redraw_ref {
+                **redraw_ref = false;
 
-            // Update overlay textures
-            overlay.update(&texture_creator, &ctx, viewport.size());
+                // Redraw blur texture
+                let mut surf = base_surface.lock().unwrap();
+                surf.refresh_texture();
+
+                // Update vertex positions
+                background_img.resize(surf.width(), surf.height());
+                background_img.fit_center(viewport.size());
+
+                blur_ctx.resize(surf.width(), surf.height());
+                blur_ctx.blur(&surf, &background_img);
+
+                // Update overlay textures
+                // overlay.update(&texture_creator, &ctx, viewport.size());
+
+                println!("Blurred ({}x{}) texture with {{offset: {}, iterations: {:.02}}}",
+                         surf.width(),
+                         surf.height(),
+                         blur_ctx.offset(),
+                         blur_ctx.iterations());
+                println!("   => Time CPU: {:6.03}ms, GPU: {:6.03}ms",
+                         blur_ctx.time_cpu(),
+                         blur_ctx.time_gpu());
+            }
         }
+        );
 
         // Draw window contents here
         viewport.activate();
@@ -303,15 +400,17 @@ fn run(image_file: &Path) {
         main_program.activate();
 
         // Draw background texture
-        background_img.draw(true);
+        sync_redraw!({
+            background_img.draw(true);
+        });
 
         // Draw overlay text
-        overlay.draw(true);
+        // overlay.draw(true);
 
         main_program.unbind();
 
         // Display rendered scene
-        canvas.window().gl_swap_window();
+        window.gl_swap_window();
 
         fps_manager.delay();
     }

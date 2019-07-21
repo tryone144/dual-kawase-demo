@@ -8,10 +8,9 @@
 
 use cpu_time::ProcessTime;
 use gl::types::{GLint, GLuint};
-use sdl2::render::Texture;
 
-use crate::renderer_gl::{FragmentShader, GLQuad, Program, Quad, TextureQuad, VertexShader,
-                         Viewport};
+use crate::renderer_gl::{FragmentShader, GLQuad, ImgSurface, Program, Quad, TextureQuad,
+                         VertexShader, Viewport};
 
 pub const MAX_ITERATIONS: usize = 8;
 
@@ -56,7 +55,7 @@ impl Framebuffer {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        crate::renderer_gl::resize_texture(self.tex, width, height);
+        crate::renderer_gl::resize_texture(self.tex, width, height, None);
         self.size = (width, height);
     }
 
@@ -117,8 +116,9 @@ impl BlurContext {
         // init framebuffers with target textures
         for (i, fbo) in fbos.iter().enumerate().skip(1) {
             let mut fb = Framebuffer::from_fbo(*fbo);
-            let tex =
-                crate::renderer_gl::create_texture(vp_size.0 / (1 << i), vp_size.1 / (1 << i));
+            let tex = crate::renderer_gl::create_texture(vp_size.0 / (1 << i),
+                                                         vp_size.1 / (1 << i),
+                                                         None);
 
             fb.attach_texture(tex)
               .expect("Failed to attach texture to framebuffer");
@@ -128,29 +128,33 @@ impl BlurContext {
         // init shader and program
         let vert_shader = VertexShader::from_source(include_str!("shaders/tex_quad.vert"))
             .expect("Cannot compile copy vertex shader");
-        let frag_shader =
-            FragmentShader::from_source(include_str!("shaders/tex_quad.frag"))
-                .expect("Cannot compile copy fragment shader");
+        let frag_shader = FragmentShader::from_source(include_str!("shaders/tex_quad.frag"))
+            .expect("Cannot compile copy fragment shader");
         let copy_program = Program::from_shaders(&[vert_shader.into(), frag_shader.into()], None)
             .expect("Cannot link copy program");
 
-        let down_vert_shader = VertexShader::from_source(include_str!("shaders/dual_kawase_down.vert"))
-           .expect("Cannot compile downsample vertex shader");
+        let down_vert_shader =
+            VertexShader::from_source(include_str!("shaders/dual_kawase_down.vert"))
+                .expect("Cannot compile downsample vertex shader");
         let down_frag_shader =
-           FragmentShader::from_source(include_str!("shaders/dual_kawase_down.frag"))
-               .expect("Cannot compile downsample fragment shader");
-        let down_program = Program::from_shaders(&[down_vert_shader.into(), down_frag_shader.into()],
-                                                 Some(&["iteration", "halfpixel", "offset"]))
-            .expect("Cannot link downsample program");
+            FragmentShader::from_source(include_str!("shaders/dual_kawase_down.frag"))
+                .expect("Cannot compile downsample fragment shader");
+        let down_program = Program::from_shaders(
+            &[down_vert_shader.into(), down_frag_shader.into()],
+            Some(&["iteration", "halfpixel", "offset"]),
+        )
+        .expect("Cannot link downsample program");
 
         let up_vert_shader = VertexShader::from_source(include_str!("shaders/dual_kawase_up.vert"))
-           .expect("Cannot compile upsample vertex shader");
+            .expect("Cannot compile upsample vertex shader");
         let up_frag_shader =
-           FragmentShader::from_source(include_str!("shaders/dual_kawase_up.frag"))
-               .expect("Cannot compile upsample fragment shader");
-        let up_program = Program::from_shaders(&[up_vert_shader.into(), up_frag_shader.into()],
-                                               Some(&["iteration", "halfpixel", "offset", "opacity"]))
-            .expect("Cannot link upsample program");
+            FragmentShader::from_source(include_str!("shaders/dual_kawase_up.frag"))
+                .expect("Cannot compile upsample fragment shader");
+        let up_program = Program::from_shaders(
+            &[up_vert_shader.into(), up_frag_shader.into()],
+            Some(&["iteration", "halfpixel", "offset", "opacity"]),
+        )
+        .expect("Cannot link upsample program");
 
         Self { iterations: 0,
                offset: 0.0,
@@ -177,12 +181,20 @@ impl BlurContext {
         self.iterations = iterations;
     }
 
+    pub fn inc_iterations(&mut self, iter_delta: i32) {
+        self.iterations = (self.iterations as i32 + iter_delta) as u32;
+    }
+
     pub fn offset(&self) -> f32 {
         self.offset
     }
 
     pub fn set_offset(&mut self, offset: f32) {
         self.offset = offset;
+    }
+
+    pub fn inc_offset(&mut self, off_delta: f32) {
+        self.offset += off_delta;
     }
 
     pub fn time_cpu(&self) -> f32 {
@@ -193,7 +205,7 @@ impl BlurContext {
         (self.time_gpu as f64 / 1000f64).round() as f32 / 1000.0
     }
 
-    fn copy(&mut self, rect: &mut Quad, src: &mut Texture, tgt: GLuint) {
+    fn copy(&mut self, rect: &mut Quad, src: GLuint, tgt: GLuint) {
         let fb = &mut self.framebuffers[0];
         fb.attach_texture(tgt)
           .expect("Failed to attach target texture to framebuffer");
@@ -202,20 +214,19 @@ impl BlurContext {
 
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT);
-            src.gl_bind_texture();
+            gl::BindTexture(gl::TEXTURE_2D, src);
         }
         rect.draw(false);
         unsafe {
-            src.gl_unbind_texture();
+            gl::BindTexture(gl::TEXTURE_2D, 0);
         }
 
         self.copy_program.unbind();
         fb.unbind_fbo();
     }
 
-    pub fn blur(&mut self, source_tex: &mut Texture, target_quad: &GLQuad) {
-        let src_width = source_tex.query().width;
-        let src_height = source_tex.query().height;
+    pub fn blur(&mut self, source_tex: &ImgSurface, target_quad: &GLQuad) {
+        let (src_width, src_height) = source_tex.size();
 
         let vp = Viewport::from_window(target_quad.width(), target_quad.height());
         let mut quad = Quad::new(0, 0, src_width, src_height, vp.size(), true, true);
@@ -232,7 +243,7 @@ impl BlurContext {
         let cpu_time_start = ProcessTime::now();
 
         if self.iterations() == 0 {
-            self.copy(&mut quad, source_tex, *target_quad.texture());
+            self.copy(&mut quad, source_tex.texture(), *target_quad.texture());
         } else {
             // Attach target texture to framebuffer
             self.framebuffers[0].attach_texture(*target_quad.texture())
@@ -260,7 +271,7 @@ impl BlurContext {
                 if iteration == 0 {
                     // first iteration: copy from source
                     unsafe {
-                        source_tex.gl_bind_texture();
+                        gl::BindTexture(gl::TEXTURE_2D, source_tex.texture());
                     }
                 } else {
                     // copy from last iteration
@@ -272,12 +283,6 @@ impl BlurContext {
 
                 // draw texture to fbo
                 quad.draw(false);
-                if iteration == 0 {
-                    // first iteration: unbind source
-                    unsafe {
-                        source_tex.gl_unbind_texture();
-                    }
-                }
             }
 
             self.down_program.unbind();
