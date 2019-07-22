@@ -21,7 +21,7 @@ mod renderer_gl;
 mod utils;
 
 use blur::BlurContext;
-// use overlay::InfoOverlay;
+use overlay::InfoOverlay;
 use renderer_gl::{FragmentShader, GLQuad, ImgSurface, Program, TextureQuad, VertexShader, Viewport};
 
 const WINDOW_TITLE: &str = "Dual-Filter Kawase Blur — Demo";
@@ -31,12 +31,10 @@ const WIN_HEIGHT: u32 = 720;
 fn run(image_file: &Path) {
     println!("Load base image '{}' ...", image_file.display());
     let base_image = image::open(image_file).expect("Cannot load base image");
-    println!("Done");
 
     // Init SDL2 with subsystems
     let sdl = sdl2::init().expect("Cannot initialize SDL2");
     let video_subsystem = sdl.video().expect("Cannot initialize video subsystem");
-    // let ttf = sdl2::ttf::init().expect("Cannot initialize ttf subsystem");
 
     let mut fps_manager = FPSManager::new();
     fps_manager.set_framerate(60)
@@ -56,6 +54,8 @@ fn run(image_file: &Path) {
                                     .expect("Cannot create OpenGL window");
     let mut viewport = Viewport::from_window(WIN_WIDTH, WIN_HEIGHT);
 
+    // TODO: Make use of transform matrix and don't rely on recalulating quad vertices
+
     let _gl_context = window.gl_create_context().expect("Cannot load GL context");
     gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::os::raw::c_void);
     println!("GL version/profile: {}.{} / {:?}",
@@ -64,8 +64,9 @@ fn run(image_file: &Path) {
              gl_attr.context_profile());
 
     // Load image as texture
-    let base_surface =
-        Arc::new(Mutex::new(ImgSurface::new_from_image(&base_image, WIN_WIDTH, WIN_HEIGHT)));
+    let base_surface = Arc::new(Mutex::new(ImgSurface::new_from_image(&base_image,
+                                                                      viewport.width(),
+                                                                      viewport.height())));
 
     // Init full-screen image display
     let mut background_img = {
@@ -80,7 +81,7 @@ fn run(image_file: &Path) {
     let mut blur_ctx = BlurContext::new(background_img.size());
 
     // Init overlay text
-    // let mut overlay = InfoOverlay::new(&ttf, &texture_creator, &ctx, viewport.size());
+    let mut overlay = InfoOverlay::new(&blur_ctx, &viewport);
 
     // Init main shader and program
     let vert_shader = VertexShader::from_source(include_str!("shaders/tex_quad.vert"))
@@ -88,19 +89,27 @@ fn run(image_file: &Path) {
     let frag_shader = FragmentShader::from_source(include_str!("shaders/tex_quad.frag"))
         .expect("Cannot compile fragment shader");
 
-    let main_program = Program::from_shaders(&[vert_shader.into(), frag_shader.into()], None)
-        .expect("Cannot link main program");
+    let mut main_program =
+        Program::from_shaders(&[vert_shader.into(), frag_shader.into()],
+                              Some(&["transform"])).expect("Cannot link main program");
+
+    main_program.activate();
+    main_program.set_uniform_mat4f("transform", &utils::matrix4f_identity())
+                .expect("Cannot set 'transform' in main program");
+    main_program.unbind();
 
     // Init GL state
     unsafe {
         gl::ClearColor(0.2, 0.2, 0.3, 1.0);
         gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
+        gl::Enable(gl::CULL_FACE);
+        gl::CullFace(gl::BACK);
     }
 
     viewport.activate();
 
     // redraw mutex lock
-    let redraw = Arc::new(Mutex::new(false));
+    let redraw = Arc::new(Mutex::new(true));
     macro_rules! sync_redraw {
         ($ref:ident | $synced:block) => {{
             let mut $ref = redraw.lock().unwrap();
@@ -132,6 +141,9 @@ fn run(image_file: &Path) {
                     // Update viewport
                     viewport.update_size(w as u32, h as u32);
                     viewport.activate();
+
+                    // Update overlay
+                    overlay.resize(&viewport);
 
                     // Resize base image
                     let (new_w, new_h) = viewport.size();
@@ -444,8 +456,8 @@ fn run(image_file: &Path) {
                 blur_ctx.resize(surf.width(), surf.height());
                 blur_ctx.blur(&surf, &background_img);
 
-                // Update overlay textures
-                // overlay.update(&texture_creator, &ctx, viewport.size());
+                // Update overlay
+                overlay.update(&blur_ctx);
 
                 println!("Blurred ({}x{}) texture with {{offset: {}, iterations: {:.02}}}",
                          surf.width(),
@@ -466,17 +478,14 @@ fn run(image_file: &Path) {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
 
-        main_program.activate();
-
+        // sync_redraw!({
         // Draw background texture
-        sync_redraw!({
-            background_img.draw(true);
-        });
-
-        // Draw overlay text
-        // overlay.draw(true);
-
+        main_program.activate();
+        background_img.draw(true);
         main_program.unbind();
+        // Draw overlay text
+        overlay.draw(true);
+        //});
 
         // Display rendered scene
         window.gl_swap_window();

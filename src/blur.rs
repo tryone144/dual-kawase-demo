@@ -55,7 +55,7 @@ impl Framebuffer {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        crate::renderer_gl::resize_texture(self.tex, width, height, None);
+        crate::renderer_gl::resize_texture_bgra(self.tex, width, height, None);
         self.size = (width, height);
     }
 
@@ -90,6 +90,15 @@ impl Framebuffer {
     }
 }
 
+impl Drop for Framebuffer {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteFramebuffers(1, &self.fbo);
+            gl::DeleteTextures(1, &self.tex);
+        }
+    }
+}
+
 pub struct BlurContext {
     iterations: u32,
     offset: f32,
@@ -116,9 +125,9 @@ impl BlurContext {
         // init framebuffers with target textures
         for (i, fbo) in fbos.iter().enumerate().skip(1) {
             let mut fb = Framebuffer::from_fbo(*fbo);
-            let tex = crate::renderer_gl::create_texture(vp_size.0 / (1 << i),
-                                                         vp_size.1 / (1 << i),
-                                                         None);
+            let tex = crate::renderer_gl::create_texture_bgra(vp_size.0 / (1 << i),
+                                                              vp_size.1 / (1 << i),
+                                                              None);
 
             fb.attach_texture(tex)
               .expect("Failed to attach texture to framebuffer");
@@ -130,8 +139,14 @@ impl BlurContext {
             .expect("Cannot compile copy vertex shader");
         let frag_shader = FragmentShader::from_source(include_str!("shaders/tex_quad.frag"))
             .expect("Cannot compile copy fragment shader");
-        let copy_program = Program::from_shaders(&[vert_shader.into(), frag_shader.into()], None)
-            .expect("Cannot link copy program");
+        let mut copy_program =
+            Program::from_shaders(&[vert_shader.into(), frag_shader.into()],
+                                  Some(&["transform"])).expect("Cannot link copy program");
+
+        copy_program.activate();
+        copy_program.set_uniform_mat4f("transform", &crate::utils::matrix4f_identity())
+                    .expect("Cannot set 'transform' in copy program");
+        copy_program.unbind();
 
         let down_vert_shader =
             VertexShader::from_source(include_str!("shaders/dual_kawase_down.vert"))

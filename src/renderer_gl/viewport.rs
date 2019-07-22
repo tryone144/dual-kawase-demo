@@ -6,6 +6,8 @@
 // that was distributed with this source code.
 //
 
+use crate::utils::Matrix4f;
+
 pub struct Viewport {
     x: i32,
     y: i32,
@@ -21,6 +23,14 @@ impl Viewport {
                h: height }
     }
 
+    pub fn width(&self) -> u32 {
+        self.w
+    }
+
+    pub fn height(&self) -> u32 {
+        self.h
+    }
+
     pub fn size(&self) -> (u32, u32) {
         (self.w, self.h)
     }
@@ -28,6 +38,15 @@ impl Viewport {
     pub fn update_size(&mut self, width: u32, height: u32) {
         self.w = width;
         self.h = height;
+    }
+
+    pub fn transform(&self) -> Matrix4f {
+        crate::utils::matrix4f_ortho(self.x as f32,
+                                     (self.x + self.w as i32) as f32,
+                                     self.y as f32,
+                                     (self.y + self.h as i32) as f32,
+                                     1.0,
+                                     -1.0)
     }
 
     pub fn activate(&self) {

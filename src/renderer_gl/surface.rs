@@ -27,7 +27,8 @@ impl ImgSurface {
             crate::utils::scale_keep_aspect(img.width(), img.height(), width, height);
         let img_scaled =
             img_internal.resize_exact(scaled_width, scaled_height, FilterType::CatmullRom);
-        let tex = super::create_texture(scaled_width, scaled_height, Some(img_scaled.raw_pixels()));
+        let tex =
+            super::create_texture_bgra(scaled_width, scaled_height, Some(img_scaled.raw_pixels()));
 
         Self { img: img_internal,
                img_scaled,
@@ -47,10 +48,10 @@ impl ImgSurface {
     }
 
     pub fn refresh_texture(&mut self) {
-        super::resize_texture(self.tex,
-                              self.width,
-                              self.height,
-                              Some(self.img_scaled.raw_pixels()));
+        super::resize_texture_bgra(self.tex,
+                                   self.width,
+                                   self.height,
+                                   Some(self.img_scaled.raw_pixels()));
     }
 
     pub fn size(&self) -> (u32, u32) {
@@ -67,5 +68,13 @@ impl ImgSurface {
 
     pub fn texture(&self) -> GLuint {
         self.tex
+    }
+}
+
+impl Drop for ImgSurface {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteTextures(1, &self.tex);
+        }
     }
 }

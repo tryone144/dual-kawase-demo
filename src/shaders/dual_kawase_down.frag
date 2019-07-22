@@ -8,7 +8,7 @@ in VS_OUT {
     vec2 texcoord;
 } IN;
 
-out vec4 Color;
+layout(location = 0) out vec4 Color;
 
 void main() {
     vec2 uv = IN.texcoord;

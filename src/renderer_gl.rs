@@ -10,8 +10,6 @@ use std::path::Path;
 use std::thread;
 
 use gl::types::{GLint, GLuint, GLvoid};
-use sdl2::render::{Texture, TextureCreator};
-use sdl2::surface::Surface;
 
 mod buffer;
 mod quad;
@@ -20,37 +18,77 @@ mod surface;
 mod viewport;
 
 pub use self::buffer::{ArrayBuffer, ElementArrayBuffer, VertexArray};
-pub use self::quad::{GLQuad, Quad, SDLQuad, TextureQuad};
+pub use self::quad::{GLQuad, Quad, TextureQuad};
 pub use self::shader::{FragmentShader, GlShader, Program, VertexShader};
 pub use self::surface::ImgSurface;
 pub use self::viewport::Viewport;
 
-pub fn create_texture(width: u32, height: u32, data: Option<Vec<u8>>) -> GLuint {
+enum Alignment {
+    RED,
+    BGRA,
+}
+
+impl Alignment {
+    pub fn value(&self) -> i32 {
+        match self {
+            Alignment::RED => 1,
+            Alignment::BGRA => 4,
+        }
+    }
+}
+
+pub fn create_texture_bgra(width: u32, height: u32, data: Option<Vec<u8>>) -> GLuint {
+    create_texture(width, height, data, Alignment::BGRA)
+}
+
+pub fn create_texture_red(width: u32, height: u32, data: Option<Vec<u8>>) -> GLuint {
+    create_texture(width, height, data, Alignment::RED)
+}
+
+fn create_texture(width: u32, height: u32, data: Option<Vec<u8>>, align: Alignment) -> GLuint {
     let mut texture: GLuint = 0;
     unsafe {
         gl::GenTextures(1, &mut texture);
     }
 
-    resize_texture(texture, width, height, data);
+    resize_texture(texture, width, height, data, align);
 
     texture
 }
 
-pub fn resize_texture(tex: GLuint, width: u32, height: u32, data: Option<Vec<u8>>) {
+pub fn resize_texture_bgra(tex: GLuint, width: u32, height: u32, data: Option<Vec<u8>>) {
+    resize_texture(tex, width, height, data, Alignment::BGRA)
+}
+
+pub fn resize_texture_red(tex: GLuint, width: u32, height: u32, data: Option<Vec<u8>>) {
+    resize_texture(tex, width, height, data, Alignment::RED)
+}
+
+fn resize_texture(tex: GLuint, width: u32, height: u32, data: Option<Vec<u8>>, align: Alignment) {
     let raw_data = match data {
         Some(vec) => vec.as_ptr() as *const GLvoid,
         None => std::ptr::null(),
     };
 
+    let components = match align {
+        Alignment::RED => gl::RED,
+        Alignment::BGRA => gl::RGBA8,
+    };
+    let format = match align {
+        Alignment::RED => gl::RED,
+        Alignment::BGRA => gl::BGRA,
+    };
+
     unsafe {
+        gl::PixelStorei(gl::UNPACK_ALIGNMENT, align.value());
         gl::BindTexture(gl::TEXTURE_2D, tex);
         gl::TexImage2D(gl::TEXTURE_2D,
                        0,
-                       gl::RGBA8 as i32,
+                       components as i32,
                        width as i32,
                        height as i32,
                        0,
-                       gl::BGRA,
+                       format,
                        gl::UNSIGNED_BYTE,
                        raw_data);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
@@ -73,36 +111,6 @@ pub fn get_texture_size(tex: GLuint) -> (u32, u32) {
     }
 
     (width as u32, height as u32)
-}
-
-pub fn set_texture_params<'r>(tex: &mut Texture<'r>) {
-    unsafe {
-        tex.gl_bind_texture();
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAX_LEVEL, 0);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
-        tex.gl_unbind_texture();
-    }
-}
-
-pub fn scaled_texture_from_surface<'a, T: 'a>(creator: &'a TextureCreator<T>,
-                                              base: &Surface,
-                                              width: u32,
-                                              height: u32)
-                                              -> Texture<'a> {
-    let (scaled_width, scaled_height) =
-        crate::utils::scale_keep_aspect(base.width(), base.height(), width, height);
-    let mut scaled_surface =
-        Surface::new(scaled_width, scaled_height, creator.default_pixel_format())
-            .expect("Cannot create temporary surface");
-
-    base.blit_scaled(None, &mut scaled_surface, None)
-        .expect("Cannot scale base image");
-
-    creator.create_texture_from_surface(scaled_surface)
-           .expect("Cannot convert image to texture")
 }
 
 pub fn save_texture_to_png(tex: GLuint, filename: &Path) {

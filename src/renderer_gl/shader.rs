@@ -9,7 +9,9 @@
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 
-use gl::types::{GLchar, GLenum, GLint, GLuint};
+use gl::types::{GLboolean, GLchar, GLenum, GLint, GLuint};
+
+use crate::utils::Matrix4f;
 
 pub struct Program {
     id: GLuint,
@@ -100,7 +102,7 @@ impl Program {
         }
     }
 
-    pub fn set_uniform_1i(&self, name: &str, value: i32) -> Result<(), String> {
+    pub fn set_uniform_1i(&mut self, name: &str, value: i32) -> Result<(), String> {
         let loc = self.uniform_map
                       .get(name)
                       .ok_or_else(|| format!("Uniform location '{}' not found", name))?;
@@ -110,7 +112,7 @@ impl Program {
         Ok(())
     }
 
-    pub fn set_uniform_1f(&self, name: &str, value: f32) -> Result<(), String> {
+    pub fn set_uniform_1f(&mut self, name: &str, value: f32) -> Result<(), String> {
         let loc = self.uniform_map
                       .get(name)
                       .ok_or_else(|| format!("Uniform location '{}' not found", name))?;
@@ -120,12 +122,22 @@ impl Program {
         Ok(())
     }
 
-    pub fn set_uniform_2f(&self, name: &str, values: (f32, f32)) -> Result<(), String> {
+    pub fn set_uniform_2f(&mut self, name: &str, values: (f32, f32)) -> Result<(), String> {
         let loc = self.uniform_map
                       .get(name)
                       .ok_or_else(|| format!("Uniform location '{}' not found", name))?;
         unsafe {
             gl::Uniform2f(*loc, values.0, values.1);
+        }
+        Ok(())
+    }
+
+    pub fn set_uniform_mat4f(&mut self, name: &str, values: &Matrix4f) -> Result<(), String> {
+        let loc = self.uniform_map
+                      .get(name)
+                      .ok_or_else(|| format!("Uniform location '{}' not found", name))?;
+        unsafe {
+            gl::UniformMatrix4fv(*loc, 1, false as GLboolean, values.as_ptr());
         }
         Ok(())
     }

@@ -37,6 +37,15 @@ impl<B: BufferType> Buffer<B> {
         }
     }
 
+    pub fn update_data<T>(&mut self, offset: isize, data: &[T]) {
+        unsafe {
+            gl::BufferSubData(B::BUFFER_TYPE,
+                              offset,
+                              (data.len() * std::mem::size_of::<T>()) as GLsizeiptr,
+                              data.as_ptr() as *const GLvoid);
+        }
+    }
+
     pub fn bind(&self) {
         unsafe {
             gl::BindBuffer(B::BUFFER_TYPE, self.vbo);

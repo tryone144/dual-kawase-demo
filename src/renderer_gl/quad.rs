@@ -9,7 +9,6 @@
 use std::ops::{Deref, DerefMut};
 
 use gl::types::{GLint, GLuint, GLvoid};
-use sdl2::render::Texture;
 
 use super::{ArrayBuffer, ElementArrayBuffer, VertexArray};
 
@@ -69,23 +68,18 @@ impl Quad {
         vao.bind();
         vbo.bind();
         unsafe {
-            gl::EnableVertexAttribArray(0);
             gl::VertexAttribPointer(0,
                                     2,
                                     gl::FLOAT,
                                     gl::FALSE,
                                     (4 * std::mem::size_of::<f32>()) as GLint,
                                     std::ptr::null());
-            gl::DisableVertexAttribArray(0);
-
-            gl::EnableVertexAttribArray(1);
             gl::VertexAttribPointer(1,
                                     2,
                                     gl::FLOAT,
                                     gl::FALSE,
                                     (4 * std::mem::size_of::<f32>()) as GLint,
                                     (2 * std::mem::size_of::<f32>()) as *const GLvoid);
-            gl::DisableVertexAttribArray(1);
         }
         vbo.unbind();
         vao.unbind();
@@ -114,10 +108,6 @@ impl Quad {
         self.height
     }
 
-    pub fn pos(&self) -> (i32, i32) {
-        (self.x, self.y)
-    }
-
     fn refresh_buffers(&mut self) {
         self.vbo.bind();
         self.vbo.set_data(&self.vertices, gl::STATIC_DRAW);
@@ -132,12 +122,6 @@ impl Quad {
         self.width = width;
         self.height = height;
         // FIXME: vertices are not updated
-    }
-
-    pub fn update_pos(&mut self, x: i32, y: i32, vp_size: (u32, u32)) {
-        self.x = x;
-        self.y = y;
-        self.update_vp(vp_size);
     }
 
     pub fn update_vp(&mut self, vp_size: (u32, u32)) {
@@ -202,63 +186,6 @@ pub trait TextureQuad<T> {
     fn draw(&mut self, blend: bool);
 }
 
-pub struct SDLQuad<'r> {
-    texture: Texture<'r>,
-    quad: Quad,
-}
-
-impl<'r> Deref for SDLQuad<'r> {
-    type Target = Quad;
-
-    fn deref(&self) -> &Self::Target {
-        &self.quad
-    }
-}
-
-impl<'r> DerefMut for SDLQuad<'r> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.quad
-    }
-}
-
-impl<'r> TextureQuad<Texture<'r>> for SDLQuad<'r> {
-    fn from_texture(mut tex: Texture<'r>, x: i32, y: i32, vp_size: (u32, u32)) -> Self {
-        let quad = Quad::new(x,
-                             y,
-                             tex.query().width,
-                             tex.query().height,
-                             vp_size,
-                             false,
-                             true);
-        super::set_texture_params(&mut tex);
-
-        Self { texture: tex, quad }
-    }
-
-    fn texture(&self) -> &Texture<'r> {
-        &self.texture
-    }
-
-    fn update_texture(&mut self, tex: Texture<'r>, vp_size: (u32, u32)) {
-        self.texture = tex;
-        super::set_texture_params(&mut self.texture);
-
-        self.quad
-            .resize(self.texture.query().width, self.texture.query().height);
-        self.update_vp(vp_size);
-    }
-
-    fn draw(&mut self, blend: bool) {
-        unsafe {
-            self.texture.gl_bind_texture();
-        }
-        self.quad.draw(blend);
-        unsafe {
-            self.texture.gl_unbind_texture();
-        }
-    }
-}
-
 pub struct GLQuad {
     texture: GLuint,
     quad: Quad,
@@ -266,14 +193,14 @@ pub struct GLQuad {
 
 impl GLQuad {
     pub fn new_with_texture(x: i32, y: i32, width: u32, height: u32, vp_size: (u32, u32)) -> Self {
-        let texture = super::create_texture(width, height, None);
+        let texture = super::create_texture_bgra(width, height, None);
         let quad = Quad::new(x, y, width as u32, height as u32, vp_size, false, false);
 
         Self { texture, quad }
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        super::resize_texture(self.texture, width, height, None);
+        super::resize_texture_bgra(self.texture, width, height, None);
         self.quad.resize(width, height);
     }
 }

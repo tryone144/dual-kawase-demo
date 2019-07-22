@@ -8,6 +8,8 @@
 
 use std::ffi::CString;
 
+pub type Matrix4f = [f32; 16];
+
 #[inline]
 pub fn scale_keep_aspect(base_w: u32, base_h: u32, width: u32, height: u32) -> (u32, u32) {
     let base_ratio: f32 = base_w as f32 / base_h as f32;
@@ -83,6 +85,31 @@ pub fn quad_at_pos(x: i32,
     let indices: Vec<u32> = vec![0, 1, 3, 1, 2, 3];
 
     (vertices, indices)
+}
+
+#[rustfmt::skip]
+#[inline]
+pub fn matrix4f_identity() -> Matrix4f {
+    [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ]
+}
+
+#[rustfmt::skip]
+#[inline]
+pub fn matrix4f_ortho(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Matrix4f {
+    let tx = -(right + left) / (right - left);
+    let ty = -(top + bottom) / (top - bottom);
+    let tz = -(far + near) / (far - near);
+    [
+        2.0 / (right - left), 0.0, 0.0, 0.0,
+        0.0, 2.0 / (top - bottom), 0.0, 0.0,
+        0.0, 0.0, -2.0 / (far - near), 0.0,
+        tx, ty, tz, 1.0,
+    ]
 }
 
 #[inline]

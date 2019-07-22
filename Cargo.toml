@@ -1,11 +1,12 @@
 [package]
 name = "dual-kawase-demo"
-version = "0.1.0"
+version = "0.1.2"
 authors = ["Bernd Busse <bernd AT busse-apps DOT de>"]
 edition = "2018"
 
 [dependencies]
 cpu-time = "0.1"
-sdl2 = { version = "0.32", features = ["ttf", "gfx"] }
+sdl2 = { version = "0.32", features = ["gfx"] }
 gl = "0.12"
-image = "0.21"
+glyph_brush = "0.5"
+image = { version = "0.21", features = ["jpeg", "png"] }
