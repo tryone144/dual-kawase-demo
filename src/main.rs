@@ -32,6 +32,17 @@ fn run(image_file: &Path) {
     println!("Load base image '{}' ...", image_file.display());
     let base_image = image::open(image_file).expect("Cannot load base image");
 
+    let input_filename = image_file.file_name()
+                                   .map(std::ffi::OsStr::to_string_lossy)
+                                   .unwrap()
+                                   .to_owned();
+    let input_basename = input_filename.split('.')
+                                       .nth(0)
+                                       .unwrap()
+                                       .split('_')
+                                       .last()
+                                       .unwrap();
+
     // Init SDL2 with subsystems
     let sdl = sdl2::init().expect("Cannot initialize SDL2");
     let video_subsystem = sdl.video().expect("Cannot initialize video subsystem");
@@ -67,6 +78,31 @@ fn run(image_file: &Path) {
     let base_surface = Arc::new(Mutex::new(ImgSurface::new_from_image(&base_image,
                                                                       viewport.width(),
                                                                       viewport.height())));
+
+    // parameters for parameter comparison
+    let mut save_image = false;
+    let mut config_index = std::usize::MAX;
+    let mut configs: Vec<(u32, f32)> = Vec::with_capacity(125);
+    for base in 0..((5 - 1) * 4 + 1) {
+        let offset = (base as f32 / 4.0) + 1.0;
+        configs.push((1, offset));
+    }
+    for base in 0..((7 - 2) * 4 + 1) {
+        let offset = (base as f32 / 4.0) + 2.0;
+        configs.push((2, offset));
+    }
+    for base in 0..((8 - 2) * 4 + 1) {
+        let offset = (base as f32 / 4.0) + 2.0;
+        configs.push((3, offset));
+    }
+    for base in 0..((10 - 2) * 4 + 1) {
+        let offset = (base as f32 / 4.0) + 2.0;
+        configs.push((4, offset));
+    }
+    for base in 0..((10 - 3) * 4 + 1) {
+        let offset = (base as f32 / 4.0) + 3.0;
+        configs.push((5, offset));
+    }
 
     // Init full-screen image display
     let mut background_img = {
@@ -292,7 +328,15 @@ fn run(image_file: &Path) {
                     let path = Path::new(&fname);
 
                     println!("Save image to '{}' ...", path.display());
-                    renderer_gl::save_texture_to_png(*background_img.texture(), path);
+                    renderer_gl::save_texture_to_png(*background_img.texture(), path, true);
+                }
+                Event::KeyDown { scancode: Some(Scancode::G),
+                                 keymod,
+                                 repeat: false,
+                                 .. } if (keymod & Mod::RCTRLMOD) | (keymod & Mod::LCTRLMOD) != Mod::NOMOD =>
+                {
+                    config_index = 0;
+                    println!("Automatically save result of different parameter sets.");
                 }
                 Event::KeyDown { keycode: Some(Keycode::Num1),
                                  keymod: Mod::NOMOD,
@@ -439,6 +483,20 @@ fn run(image_file: &Path) {
             }
         }
 
+        sync_redraw!(
+                     redraw_ref | {
+            if config_index < configs.len() {
+                let config = configs[config_index];
+                blur_ctx.set_iterations(config.0);
+                blur_ctx.set_offset(config.1);
+                config_index += 1;
+
+                *redraw_ref = true;
+                save_image = true;
+            }
+        }
+        );
+
         // check for redraw events
         try_sync_redraw!(
                          redraw_ref | {
@@ -467,6 +525,17 @@ fn run(image_file: &Path) {
                 println!("   => Time CPU: {:6.03}ms, GPU: {:6.03}ms",
                          blur_ctx.time_cpu(),
                          blur_ctx.time_gpu());
+
+                if save_image {
+                    save_image = false;
+                    let fname = format!("{:02}_{}-{:05.2}.png",
+                                        blur_ctx.iterations(),
+                                        input_basename,
+                                        blur_ctx.offset());
+                    let path = Path::new(&fname);
+                    println!("Save image to '{}' ...", path.display());
+                    renderer_gl::save_texture_to_png(*background_img.texture(), path, false);
+                }
             }
         }
         );

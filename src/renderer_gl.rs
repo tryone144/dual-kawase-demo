@@ -113,7 +113,7 @@ pub fn get_texture_size(tex: GLuint) -> (u32, u32) {
     (width as u32, height as u32)
 }
 
-pub fn save_texture_to_png(tex: GLuint, filename: &Path) {
+pub fn save_texture_to_png(tex: GLuint, filename: &Path, in_background: bool) {
     // get texture size
     let (width, height) = get_texture_size(tex);
 
@@ -133,7 +133,19 @@ pub fn save_texture_to_png(tex: GLuint, filename: &Path) {
 
     // save pixels to file
     let fname = filename.to_owned();
-    thread::spawn(move || {
+    if in_background {
+        thread::spawn(move || {
+            match image::save_buffer(fname,
+                                     &pixel_buf,
+                                     width as u32,
+                                     height as u32,
+                                     image::RGBA(8)).map_err(|e| e.to_string())
+            {
+                Ok(_) => println!("Save complete"),
+                Err(msg) => eprintln!("Cannot save blurred image: {}", msg),
+            }
+        });
+    } else {
         match image::save_buffer(fname,
                                  &pixel_buf,
                                  width as u32,
@@ -142,6 +154,6 @@ pub fn save_texture_to_png(tex: GLuint, filename: &Path) {
         {
             Ok(_) => println!("Save complete"),
             Err(msg) => eprintln!("Cannot save blurred image: {}", msg),
-        }
-    });
+        };
+    }
 }

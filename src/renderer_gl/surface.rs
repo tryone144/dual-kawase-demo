@@ -41,7 +41,7 @@ impl ImgSurface {
         let (scaled_width, scaled_height) =
             crate::utils::scale_keep_aspect(self.img.width(), self.img.height(), width, height);
         self.img_scaled = self.img
-                              .resize_exact(scaled_width, scaled_height, FilterType::CatmullRom);
+                              .resize_exact(scaled_width, scaled_height, FilterType::Triangle);
 
         self.width = scaled_width;
         self.height = scaled_height;
